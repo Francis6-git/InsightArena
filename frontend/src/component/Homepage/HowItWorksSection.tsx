@@ -1,36 +1,38 @@
+import { Crown, TrendingUp, Users, BarChart3 } from "lucide-react";
+
 export default function HowItWorksSection() {
   const steps = [
     {
-      number: "01",
-      title: "Discover or Create",
+      icon: <Crown className="w-6 h-6 text-orange-400" />,
+      title: "Compete for Recognition",
       description:
-        "Join public prediction markets on real-world outcomes (sports, crypto) or create your own custom private challenges to invite friends using unique codes.",
+        "Build your reputation as a top predictor and earn recognition from the community for your insights and accuracy.",
     },
     {
-      number: "02",
-      title: "Predict & Compete",
+      icon: <TrendingUp className="w-6 h-6 text-orange-400" />,
+      title: "Monetize Your Expertise",
       description:
-        "Submit predictions seamlessly with fraction-of-a-cent fees and instant finality powered natively by the Stellar network.",
+        "Turn your knowledge into revenue by creating markets and earning fees from trading activity on your questions.",
     },
     {
-      number: "03",
-      title: "Results Verified on Soroban",
+      icon: <Users className="w-6 h-6 text-orange-400" />,
+      title: "Identify Skills to Monetize",
       description:
-        "Once an event concludes, outcomes are resolved securely and transparently. Payouts and points are distributed immediately through automated Soroban smart contracts.",
+        "Discover which topics and categories showcase your predictive abilities and focus on your strengths.",
     },
     {
-      number: "04",
+      icon: <BarChart3 className="w-6 h-6 text-orange-400" />,
       title: "Climb the Leaderboards",
       description:
-        "Gamify your insights! Earn points based on accuracy to rank up on global and private leaderboards for special seasonal rewards.",
+        "Track your progress and compete with other predictors to reach the top of global and category-specific rankings.",
     },
   ];
 
   return (
-    <section className="relative py-20">
+    <section className="relative py-24">
       <div className="max-w-7xl mx-auto px-6">
-        <div className="grid lg:grid-cols-2 gap-16 items-center mb-[200px]">
-          {/* Left side - Title and illustration */}
+        <div className="grid lg:grid-cols-2 gap-20 items-center">
+          {/* Left side - Title and description */}
           <div className="text-center lg:text-left">
             <h2 className="text-4xl lg:text-5xl font-bold text-white mb-8 leading-tight">
               Build Your{" "}
@@ -38,56 +40,32 @@ export default function HowItWorksSection() {
                 Insight
               </span>
             </h2>
-            <p className="text-xl text-gray-300 mb-12 max-w-lg mx-auto lg:mx-0">
-              InsightArena redefines prediction markets by fusing smart-contract
-              infrastructure with gamified competition on the Stellar network.
+            <p className="text-xl text-gray-300 mb-12 max-w-lg mx-auto lg:mx-0 leading-relaxed">
+              Leverage your knowledge and analytical skills to make accurate
+              predictions. Whether you're an expert or just getting started,
+              InsightArena provides the tools to showcase your abilities and earn
+              rewards.
             </p>
           </div>
 
-          {/* Right side - Steps with curved connecting line */}
-          <div className="relative space-y-8">
-            {/* Curved connecting line SVG */}
-            <svg
-              className="absolute left-8 top-8 opacity-30 pointer-events-none"
-              width="2"
-              height="calc(100% - 64px)"
-              viewBox="0 0 2 400"
-              fill="none"
-              style={{ left: "32px", top: "32px" }}
-            >
-              <path
-                d="M1 0 Q50 100 1 200 Q-50 300 1 400"
-                stroke="url(#gradient)"
-                strokeWidth="2"
-                fill="none"
-              />
-              <defs>
-                <linearGradient id="gradient" x1="0%" y1="0%" x2="0%" y2="100%">
-                  <stop offset="0%" stopColor="#fb923c" />
-                  <stop offset="50%" stopColor="#f59e0b" />
-                  <stop offset="100%" stopColor="#eab308" />
-                </linearGradient>
-              </defs>
-            </svg>
-
+          {/* Right side - Points with Icons */}
+          <div className="relative space-y-10">
             {steps.map((step, index) => (
               <div
                 key={index}
-                className="relative flex flex-col lg:flex-row items-center lg:items-start gap-4 lg:gap-6 text-center lg:text-left"
+                className="relative flex flex-row items-start gap-6 group"
               >
-                {/* Step number circle */}
-                <div className="relative z-10 flex-shrink-0 w-16 h-16 bg-gray-900 border-2 border-orange-400 rounded-full flex items-center justify-center shadow-lg">
-                  <span className="text-lg font-bold text-orange-400">
-                    {step.number}
-                  </span>
+                {/* Icon box */}
+                <div className="relative z-10 flex-shrink-0 w-12 h-12 bg-gray-900/50 border border-gray-700/50 rounded-lg flex items-center justify-center shadow-lg group-hover:border-orange-500/50 transition-colors">
+                  {step.icon}
                 </div>
 
                 {/* Content */}
-                <div className="flex-1 pt-0 lg:pt-2">
-                  <h3 className="text-xl font-bold text-white mb-3">
+                <div className="flex-1">
+                  <h3 className="text-xl font-bold text-white mb-2 group-hover:text-orange-400 transition-colors">
                     {step.title}
                   </h3>
-                  <p className="text-gray-300 leading-relaxed">
+                  <p className="text-gray-400 leading-relaxed">
                     {step.description}
                   </p>
                 </div>
