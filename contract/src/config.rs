@@ -149,4 +149,3 @@ pub(crate) fn ensure_not_paused(env: &Env) -> Result<(), InsightArenaError> {
     }
     Ok(())
 }
-
