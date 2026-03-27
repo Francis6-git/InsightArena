@@ -1,7 +1,8 @@
-use soroban_sdk::{contracttype, Address, Env};
+use soroban_sdk::{contracttype, Address, Env, Symbol, Vec};
 
 use crate::errors::InsightArenaError;
 use crate::storage_types::DataKey;
+use crate::ttl;
 
 // ── TTL constants ─────────────────────────────────────────────────────────────
 // Assuming ~5 s per ledger:
@@ -36,9 +37,7 @@ pub struct Config {
 /// Extend the persistent TTL for the Config entry whenever it drops below
 /// `PERSISTENT_THRESHOLD`. Must be called on every read *and* every write.
 fn bump_config(env: &Env) {
-    env.storage()
-        .persistent()
-        .extend_ttl(&DataKey::Config, PERSISTENT_THRESHOLD, PERSISTENT_BUMP);
+    ttl::extend_config_ttl(env);
 }
 
 /// Load Config from persistent storage.
@@ -79,8 +78,25 @@ pub fn initialize(
 
     env.storage().persistent().set(&DataKey::Config, &config);
     bump_config(env);
+    env.storage()
+        .instance()
+        .set(&DataKey::Categories, &default_categories(env));
+    env.storage()
+        .instance()
+        .extend_ttl(PERSISTENT_THRESHOLD, PERSISTENT_BUMP);
 
     Ok(())
+}
+
+pub(crate) fn default_categories(env: &Env) -> Vec<Symbol> {
+    let mut categories = Vec::new(env);
+    categories.push_back(Symbol::new(env, "Sports"));
+    categories.push_back(Symbol::new(env, "Crypto"));
+    categories.push_back(Symbol::new(env, "Politics"));
+    categories.push_back(Symbol::new(env, "Entertainment"));
+    categories.push_back(Symbol::new(env, "Science"));
+    categories.push_back(Symbol::new(env, "Other"));
+    categories
 }
 
 /// Return the current global [`Config`] and extend its TTL.
@@ -88,6 +104,14 @@ pub fn get_config(env: &Env) -> Result<Config, InsightArenaError> {
     let config = load_config(env)?;
     bump_config(env);
     Ok(config)
+}
+
+/// Return the current global [`Config`] without mutating storage.
+///
+/// This helper is intended for strict view functions that must avoid any state
+/// writes, including TTL extension side-effects.
+pub fn get_config_readonly(env: &Env) -> Result<Config, InsightArenaError> {
+    load_config(env)
 }
 
 /// Update the protocol fee rate. Caller must be the stored admin.
