@@ -45,7 +45,7 @@ export class AnalyticsService {
   async logActivity(
     userId: string,
     actionType: string,
-    details?: any,
+    details?: Record<string, unknown> | null,
     ipAddress?: string,
   ) {
     const log = this.activityLogsRepository.create({

@@ -7,6 +7,21 @@ import { Prediction } from '../predictions/entities/prediction.entity';
 import { Competition } from '../competitions/entities/competition.entity';
 import { ActivityLog } from '../analytics/entities/activity-log.entity';
 import { AnalyticsService } from '../analytics/analytics.service';
+import { ListUsersQueryDto } from './dto/list-users-query.dto';
+import { ActivityLogQueryDto } from './dto/activity-log-query.dto';
+
+interface StatsResponse {
+  total_users: number;
+  active_users_24h: number;
+  active_users_7d: number;
+  total_markets: number;
+  active_markets: number;
+  resolved_markets: number;
+  total_predictions: number;
+  total_volume_stroops: string;
+  total_competitions: number;
+  platform_revenue_stroops: string;
+}
 
 @Injectable()
 export class AdminService {
@@ -24,7 +39,7 @@ export class AdminService {
     private readonly analyticsService: AnalyticsService,
   ) {}
 
-  async getStats() {
+  async getStats(): Promise<StatsResponse> {
     const now = new Date();
     const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
     const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
@@ -46,18 +61,21 @@ export class AdminService {
     });
 
     const total_predictions = await this.predictionsRepository.count();
-    
-    const volumeResult = await this.marketsRepository
+
+    const volumeResult = (await this.marketsRepository
       .createQueryBuilder('market')
       .select('SUM(CAST(market.total_pool_stroops AS DECIMAL))', 'total')
-      .getRawOne();
-    
+      .getRawOne()) as { total: string | null };
+
     const total_volume_stroops = volumeResult?.total || '0';
 
     const total_competitions = await this.competitionsRepository.count();
 
     // Platform revenue (2% fee of total volume as an example)
-    const platform_revenue_stroops = (BigInt(total_volume_stroops.split('.')[0]) * BigInt(2) / BigInt(100)).toString();
+    const platform_revenue_stroops = (
+      (BigInt(total_volume_stroops.split('.')[0]) * BigInt(2)) /
+      BigInt(100)
+    ).toString();
 
     return {
       total_users,
@@ -73,16 +91,26 @@ export class AdminService {
     };
   }
 
-  async listUsers(query: any) {
-    const { page = 1, limit = 10, search, role, sortBy = 'created_at', sortOrder = 'DESC' } = query;
+  async listUsers(query: ListUsersQueryDto) {
+    const {
+      page = 1,
+      limit = 10,
+      search,
+      role,
+      sortBy = 'created_at',
+      sortOrder = 'DESC',
+    } = query;
     const skip = (page - 1) * limit;
 
     const queryBuilder = this.usersRepository.createQueryBuilder('user');
 
     if (search) {
-      queryBuilder.where('user.username ILIKE :search OR user.stellar_address ILIKE :search', {
-        search: `%${search}%`,
-      });
+      queryBuilder.where(
+        'user.username ILIKE :search OR user.stellar_address ILIKE :search',
+        {
+          search: `%${search}%`,
+        },
+      );
     }
 
     if (role) {
@@ -104,7 +132,7 @@ export class AdminService {
     };
   }
 
-  async banUser(id: string, reason: string, adminId: string) {
+  async banUser(id: string, reason: string, adminId: string): Promise<User> {
     const user = await this.usersRepository.findOne({ where: { id } });
     if (!user) throw new NotFoundException('User not found');
 
@@ -115,12 +143,15 @@ export class AdminService {
 
     await this.usersRepository.save(user);
 
-    await this.analyticsService.logActivity(user.id, 'USER_BANNED', { reason, banned_by: adminId });
+    await this.analyticsService.logActivity(user.id, 'USER_BANNED', {
+      reason,
+      banned_by: adminId,
+    });
 
     return user;
   }
 
-  async unbanUser(id: string, adminId: string) {
+  async unbanUser(id: string, adminId: string): Promise<User> {
     const user = await this.usersRepository.findOne({ where: { id } });
     if (!user) throw new NotFoundException('User not found');
 
@@ -131,27 +162,34 @@ export class AdminService {
 
     await this.usersRepository.save(user);
 
-    await this.analyticsService.logActivity(user.id, 'USER_UNBANNED', { unbanned_by: adminId });
+    await this.analyticsService.logActivity(user.id, 'USER_UNBANNED', {
+      unbanned_by: adminId,
+    });
 
     return user;
   }
 
-  async getUserActivity(userId: string, query: any) {
+  async getUserActivity(userId: string, query: ActivityLogQueryDto) {
     const { page = 1, limit = 10, actionType, startDate, endDate } = query;
     const skip = (page - 1) * limit;
 
-    const where: any = { userId };
-    if (actionType) where.actionType = actionType;
-    if (startDate && endDate) {
-      where.timestamp = Between(new Date(startDate), new Date(endDate));
+    const queryBuilder = this.activityLogsRepository.createQueryBuilder('log');
+    queryBuilder.where('log.userId = :userId', { userId });
+
+    if (actionType) {
+      queryBuilder.andWhere('log.actionType = :actionType', { actionType });
     }
 
-    const [logs, total] = await this.activityLogsRepository.findAndCount({
-      where,
-      order: { timestamp: 'DESC' },
-      skip,
-      take: limit,
-    });
+    if (startDate && endDate) {
+      queryBuilder.andWhere('log.timestamp BETWEEN :startDate AND :endDate', {
+        startDate: new Date(startDate),
+        endDate: new Date(endDate),
+      });
+    }
+
+    queryBuilder.orderBy('log.timestamp', 'DESC').skip(skip).take(limit);
+
+    const [logs, total] = await queryBuilder.getManyAndCount();
 
     return {
       data: logs,

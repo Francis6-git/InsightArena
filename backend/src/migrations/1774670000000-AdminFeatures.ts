@@ -8,7 +8,9 @@ export class AdminFeatures1774670000000 implements MigrationInterface {
     await queryRunner.query(
       `ALTER TABLE "users" ADD "is_banned" boolean NOT NULL DEFAULT false`,
     );
-    await queryRunner.query(`ALTER TABLE "users" ADD "ban_reason" character varying`);
+    await queryRunner.query(
+      `ALTER TABLE "users" ADD "ban_reason" character varying`,
+    );
     await queryRunner.query(`ALTER TABLE "users" ADD "banned_at" TIMESTAMP`);
     await queryRunner.query(`ALTER TABLE "users" ADD "banned_by" uuid`);
 

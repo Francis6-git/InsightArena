@@ -11,11 +11,15 @@ import {
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
+import { Role } from '../common/enums/role.enum';
 import { AdminService } from './admin.service';
+import { ListUsersQueryDto } from './dto/list-users-query.dto';
+import { BanUserDto } from './dto/ban-user.dto';
+import { ActivityLogQueryDto } from './dto/activity-log-query.dto';
 
 @Controller('admin')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles('admin')
+@Roles(Role.Admin)
 export class AdminController {
   constructor(private readonly adminService: AdminService) {}
 
@@ -25,26 +29,36 @@ export class AdminController {
   }
 
   @Get('users')
-  async listUsers(@Query() query: any) {
+  async listUsers(@Query() query: ListUsersQueryDto) {
     return this.adminService.listUsers(query);
   }
 
   @Patch('users/:id/ban')
   async banUser(
     @Param('id') id: string,
-    @Body('reason') reason: string,
+    @Body() dto: BanUserDto,
     @Request() req: any,
   ) {
-    return this.adminService.banUser(id, reason, req.user.id);
+    return this.adminService.banUser(
+      id,
+      dto.reason,
+      (req as { user: { id: string } }).user.id,
+    );
   }
 
   @Patch('users/:id/unban')
   async unbanUser(@Param('id') id: string, @Request() req: any) {
-    return this.adminService.unbanUser(id, req.user.id);
+    return this.adminService.unbanUser(
+      id,
+      (req as { user: { id: string } }).user.id,
+    );
   }
 
   @Get('users/:id/activity')
-  async getUserActivity(@Param('id') id: string, @Query() query: any) {
+  async getUserActivity(
+    @Param('id') id: string,
+    @Query() query: ActivityLogQueryDto,
+  ) {
     return this.adminService.getUserActivity(id, query);
   }
 }
