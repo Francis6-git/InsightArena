@@ -1,9 +1,28 @@
-use soroban_sdk::{Address, Env};
-
+use soroban_sdk::{Address, Env, Vec};
 use crate::storage_types::{DataKey, LeaderboardSnapshot, Season, UserProfile};
+use crate::errors::InsightArenaError;
 
 /// `stake_bonus = floor(stake_xlm / 10)` → `floor(stake_stroops / 10^8 stroops)`.
 const STROOPS_PER_STAKE_POINT: i128 = 100_000_000;
+
+// --- Storage & Data Access ---
+
+/// Fetch a leaderboard snapshot for a specific season.
+pub fn get_leaderboard(env: &Env, season_id: u32) -> Result<LeaderboardSnapshot, InsightArenaError> {
+    let key = DataKey::Leaderboard(season_id);
+    env.storage()
+        .persistent()
+        .get(&key)
+        .ok_or(InsightArenaError::SeasonNotFound)
+}
+
+/// Store a leaderboard snapshot.
+pub fn store_snapshot(env: &Env, snapshot: &LeaderboardSnapshot) {
+    let key = DataKey::Leaderboard(snapshot.season_id);
+    env.storage().persistent().set(&key, snapshot);
+}
+
+// --- Points & Logic ---
 
 /// Pure function: no storage reads.
 ///
@@ -20,6 +39,7 @@ pub fn calculate_points(stake_amount: i128, correct: u32, total: u32) -> u32 {
     let sum = 100_i128.saturating_add(stake_bonus);
     let numer = sum.saturating_mul(correct).saturating_mul(2_i128);
     let res = numer / total;
+    
     if res < 0 {
         return 0;
     }
@@ -32,8 +52,7 @@ pub fn calculate_points(stake_amount: i128, correct: u32, total: u32) -> u32 {
 
 /// Returns season points for `user` in `season_id`.
 /// - Finalized seasons: points from the leaderboard snapshot.
-/// - Active season (matches [`crate::season::get_active_season`] or [`DataKey::ActiveSeason`]):
-///   live [`UserProfile::season_points`].
+/// - Active season: live [`UserProfile::season_points`].
 /// - Unknown users: `0`. Never panics.
 pub fn get_user_season_points(env: &Env, user: Address, season_id: u32) -> u32 {
     let Some(season) = env
@@ -45,18 +64,11 @@ pub fn get_user_season_points(env: &Env, user: Address, season_id: u32) -> u32 {
     };
 
     if season.is_finalized {
-        if let Some(snapshot) = env
-            .storage()
-            .persistent()
-            .get::<DataKey, LeaderboardSnapshot>(&DataKey::Leaderboard(season_id))
-        {
-            let mut i = 0_u32;
-            while i < snapshot.entries.len() {
-                let e = snapshot.entries.get(i).unwrap();
+        if let Ok(snapshot) = get_leaderboard(env, season_id) {
+            for e in snapshot.entries.iter() {
                 if e.user == user {
                     return e.points;
                 }
-                i = i.saturating_add(1);
             }
         }
         return 0;
@@ -82,18 +94,12 @@ pub fn get_user_season_points(env: &Env, user: Address, season_id: u32) -> u32 {
             .unwrap_or(0);
     }
 
-    if let Some(snapshot) = env
-        .storage()
-        .persistent()
-        .get::<DataKey, LeaderboardSnapshot>(&DataKey::Leaderboard(season_id))
-    {
-        let mut i = 0_u32;
-        while i < snapshot.entries.len() {
-            let e = snapshot.entries.get(i).unwrap();
+    // Fallback check for snapshot if not currently live
+    if let Ok(snapshot) = get_leaderboard(env, season_id) {
+        for e in snapshot.entries.iter() {
             if e.user == user {
                 return e.points;
             }
-            i = i.saturating_add(1);
         }
     }
 
@@ -106,13 +112,11 @@ mod leaderboard_tests {
 
     #[test]
     fn first_prediction_perfect_accuracy() {
-        // 2 XLM staked → floor(2/10)=0 bonus; (100+0)*1*2/1 = 200
         assert_eq!(calculate_points(20_000_000, 1, 1), 200);
     }
 
     #[test]
     fn perfect_accuracy_multiple_predictions() {
-        // 5 XLM → floor(5/10)=0; (100+0)*3*2/3 = 200
         assert_eq!(calculate_points(50_000_000, 3, 3), 200);
     }
 
@@ -123,13 +127,11 @@ mod leaderboard_tests {
 
     #[test]
     fn stake_bonus_one_per_ten_xlm() {
-        // 100 XLM = 1_000_000_000 stroops → floor(100/10)=10 bonus
         assert_eq!(calculate_points(1_000_000_000, 1, 1), (100 + 10) * 2);
     }
 
     #[test]
     fn partial_accuracy_rounds_down() {
-        // (100+0)*1*2/3 = 66
         assert_eq!(calculate_points(10_000_000, 1, 3), 66);
     }
 
@@ -147,7 +149,6 @@ mod leaderboard_tests {
     fn get_user_season_points_unknown_season_and_user_returns_zero() {
         use soroban_sdk::testutils::Address as _;
         use soroban_sdk::{Address, Env};
-
         use crate::InsightArenaContract;
 
         let env = Env::default();

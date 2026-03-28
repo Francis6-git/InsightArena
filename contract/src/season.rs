@@ -1,5 +1,5 @@
 use soroban_sdk::{symbol_short, Address, Env, Vec};
-
+use crate::leaderboard;
 use crate::config::{self, PERSISTENT_BUMP, PERSISTENT_THRESHOLD};
 use crate::errors::InsightArenaError;
 use crate::escrow;
@@ -77,7 +77,7 @@ pub(crate) fn track_user_profile(env: &Env, address: &Address) {
     store_user_list(env, &users);
 }
 
-fn load_season(env: &Env, season_id: u32) -> Result<Season, InsightArenaError> {
+pub fn load_season(env: &Env, season_id: u32) -> Result<Season, InsightArenaError> {
     let season = env
         .storage()
         .persistent()
@@ -272,7 +272,7 @@ fn emit_season_created(
     );
 }
 
-fn emit_leaderboard_updated(env: &Env, season_id: u32, updated_at: u64) {
+pub fn emit_leaderboard_updated(env: &Env, season_id: u32, updated_at: u64) {
     env.events().publish(
         (symbol_short!("lead"), symbol_short!("updtd")),
         (season_id, updated_at),
@@ -399,7 +399,9 @@ pub fn update_leaderboard(
     }
 
     let updated_at = env.ledger().timestamp();
-    store_leaderboard_snapshot(
+    
+    // Call the persistence layer in leaderboard.rs
+    leaderboard::store_snapshot(
         env,
         &LeaderboardSnapshot {
             season_id,
