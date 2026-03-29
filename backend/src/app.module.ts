@@ -78,6 +78,7 @@ import { UsersModule } from './users/users.module';
     SorobanModule,
     AdminModule,
     CommonModule,
+    AnalyticsModule,
   ],
 
   controllers: [AppController],
