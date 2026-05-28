@@ -5,6 +5,7 @@ import { CreatorEvent } from '../matches/entities/creator-event.entity';
 import {
   AdminCreatorEventsController,
   CreatorEventsController,
+  PublicCreatorEventsController,
 } from './creator-events.controller';
 import { CreatorEventsService } from './creator-events.service';
 
