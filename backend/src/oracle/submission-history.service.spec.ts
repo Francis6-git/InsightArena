@@ -2,7 +2,10 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { SubmissionHistoryService } from './submission-history.service';
-import { OracleSubmission, SubmissionStatus } from './entities/oracle-submission.entity';
+import {
+  OracleSubmission,
+  SubmissionStatus,
+} from './entities/oracle-submission.entity';
 import { GetSubmissionsQueryDto } from './dto/submission-history.dto';
 
 describe('SubmissionHistoryService', () => {
@@ -40,7 +43,9 @@ describe('SubmissionHistoryService', () => {
     }).compile();
 
     service = module.get<SubmissionHistoryService>(SubmissionHistoryService);
-    submissionRepository = module.get<Repository<OracleSubmission>>(getRepositoryToken(OracleSubmission));
+    submissionRepository = module.get<Repository<OracleSubmission>>(
+      getRepositoryToken(OracleSubmission),
+    );
   });
 
   it('should be defined', () => {
@@ -54,8 +59,12 @@ describe('SubmissionHistoryService', () => {
         limit: 20,
       };
 
-      jest.spyOn(submissionRepository, 'findAndCount').mockResolvedValue([[mockSubmission], 1]);
-      jest.spyOn(submissionRepository, 'find').mockResolvedValue([mockSubmission]);
+      jest
+        .spyOn(submissionRepository, 'findAndCount')
+        .mockResolvedValue([[mockSubmission], 1]);
+      jest
+        .spyOn(submissionRepository, 'find')
+        .mockResolvedValue([mockSubmission]);
 
       const result = await service.getSubmissions(query);
 
@@ -77,8 +86,12 @@ describe('SubmissionHistoryService', () => {
         status: SubmissionStatus.SUBMITTED,
       };
 
-      jest.spyOn(submissionRepository, 'findAndCount').mockResolvedValue([[mockSubmission], 1]);
-      jest.spyOn(submissionRepository, 'find').mockResolvedValue([mockSubmission]);
+      jest
+        .spyOn(submissionRepository, 'findAndCount')
+        .mockResolvedValue([[mockSubmission], 1]);
+      jest
+        .spyOn(submissionRepository, 'find')
+        .mockResolvedValue([mockSubmission]);
 
       const result = await service.getSubmissions(query);
 
@@ -98,8 +111,12 @@ describe('SubmissionHistoryService', () => {
         matchId: '123',
       };
 
-      jest.spyOn(submissionRepository, 'findAndCount').mockResolvedValue([[mockSubmission], 1]);
-      jest.spyOn(submissionRepository, 'find').mockResolvedValue([mockSubmission]);
+      jest
+        .spyOn(submissionRepository, 'findAndCount')
+        .mockResolvedValue([[mockSubmission], 1]);
+      jest
+        .spyOn(submissionRepository, 'find')
+        .mockResolvedValue([mockSubmission]);
 
       const result = await service.getSubmissions(query);
 
@@ -120,8 +137,12 @@ describe('SubmissionHistoryService', () => {
         dateTo: '2024-12-31T23:59:59Z',
       };
 
-      jest.spyOn(submissionRepository, 'findAndCount').mockResolvedValue([[mockSubmission], 1]);
-      jest.spyOn(submissionRepository, 'find').mockResolvedValue([mockSubmission]);
+      jest
+        .spyOn(submissionRepository, 'findAndCount')
+        .mockResolvedValue([[mockSubmission], 1]);
+      jest
+        .spyOn(submissionRepository, 'find')
+        .mockResolvedValue([mockSubmission]);
 
       const result = await service.getSubmissions(query);
 
@@ -140,7 +161,9 @@ describe('SubmissionHistoryService', () => {
         { ...mockSubmission, id: 'sub-3', status: SubmissionStatus.PENDING },
       ];
 
-      jest.spyOn(submissionRepository, 'findAndCount').mockResolvedValue([submissions, 3]);
+      jest
+        .spyOn(submissionRepository, 'findAndCount')
+        .mockResolvedValue([submissions, 3]);
       jest.spyOn(submissionRepository, 'find').mockResolvedValue(submissions);
 
       const result = await service.getSubmissions(query);
@@ -160,8 +183,12 @@ describe('SubmissionHistoryService', () => {
         limit: 200, // Request more than max
       };
 
-      jest.spyOn(submissionRepository, 'findAndCount').mockResolvedValue([[mockSubmission], 1]);
-      jest.spyOn(submissionRepository, 'find').mockResolvedValue([mockSubmission]);
+      jest
+        .spyOn(submissionRepository, 'findAndCount')
+        .mockResolvedValue([[mockSubmission], 1]);
+      jest
+        .spyOn(submissionRepository, 'find')
+        .mockResolvedValue([mockSubmission]);
 
       const result = await service.getSubmissions(query);
 
@@ -176,7 +203,9 @@ describe('SubmissionHistoryService', () => {
 
   describe('getSubmissionById', () => {
     it('should return submission by ID', async () => {
-      jest.spyOn(submissionRepository, 'findOne').mockResolvedValue(mockSubmission);
+      jest
+        .spyOn(submissionRepository, 'findOne')
+        .mockResolvedValue(mockSubmission);
 
       const result = await service.getSubmissionById('sub-1');
 

@@ -83,7 +83,9 @@ export class NotificationGeneratorService {
       where: { on_chain_event_id: eventId },
     });
     if (!event) {
-      this.logger.warn(`MatchAdded notification skipped: event ${eventId} not found`);
+      this.logger.warn(
+        `MatchAdded notification skipped: event ${eventId} not found`,
+      );
       return;
     }
 
@@ -96,7 +98,12 @@ export class NotificationGeneratorService {
         type: NotificationType.MatchAdded,
         title: 'New Match Added',
         message: `A new match between ${teamA} and ${teamB} has been added to your event.`,
-        data: { match_id: matchId, event_id: eventId, team_a: teamA, team_b: teamB },
+        data: {
+          match_id: matchId,
+          event_id: eventId,
+          team_a: teamA,
+          team_b: teamB,
+        },
       }));
 
     await this.queueBatchNotifications(notifications);
@@ -115,7 +122,9 @@ export class NotificationGeneratorService {
       where: { on_chain_event_id: eventId },
     });
     if (!event) {
-      this.logger.warn(`UserJoinedEvent notification skipped: event ${eventId} not found`);
+      this.logger.warn(
+        `UserJoinedEvent notification skipped: event ${eventId} not found`,
+      );
       return;
     }
 
@@ -134,13 +143,17 @@ export class NotificationGeneratorService {
     });
   }
 
-  async handlePredictionSubmitted(data: Record<string, unknown>): Promise<void> {
+  async handlePredictionSubmitted(
+    data: Record<string, unknown>,
+  ): Promise<void> {
     const matchId = Number(data.match_id);
     const predictor = this.readString(data, 'predictor');
     const predictedOutcome = this.readString(data, 'predicted_outcome');
 
     if (!matchId || !predictor) {
-      this.logger.warn('PredictionSubmitted notification skipped: missing data');
+      this.logger.warn(
+        'PredictionSubmitted notification skipped: missing data',
+      );
       return;
     }
 
@@ -159,13 +172,17 @@ export class NotificationGeneratorService {
     });
   }
 
-  async handleMatchResultSubmitted(data: Record<string, unknown>): Promise<void> {
+  async handleMatchResultSubmitted(
+    data: Record<string, unknown>,
+  ): Promise<void> {
     const matchId = Number(data.match_id);
     const eventId = Number(data.event_id);
     const winningTeam = Number(data.winning_team);
 
     if (!matchId) {
-      this.logger.warn('MatchResultSubmitted notification skipped: missing data');
+      this.logger.warn(
+        'MatchResultSubmitted notification skipped: missing data',
+      );
       return;
     }
 
@@ -174,7 +191,9 @@ export class NotificationGeneratorService {
       relations: ['event'],
     });
     if (!match) {
-      this.logger.warn(`MatchResultSubmitted notification skipped: match ${matchId} not found`);
+      this.logger.warn(
+        `MatchResultSubmitted notification skipped: match ${matchId} not found`,
+      );
       return;
     }
 
@@ -201,10 +220,11 @@ export class NotificationGeneratorService {
 
   async handleWinnersVerified(data: Record<string, unknown>): Promise<void> {
     const eventId = Number(data.event_id);
-    const winners = Array.isArray(data.winners) ? data.winners : [];
 
     if (!eventId) {
-      this.logger.warn('WinnersVerified notification skipped: missing event_id');
+      this.logger.warn(
+        'WinnersVerified notification skipped: missing event_id',
+      );
       return;
     }
 
@@ -212,7 +232,9 @@ export class NotificationGeneratorService {
       where: { on_chain_event_id: eventId },
     });
     if (!event) {
-      this.logger.warn(`WinnersVerified notification skipped: event ${eventId} not found`);
+      this.logger.warn(
+        `WinnersVerified notification skipped: event ${eventId} not found`,
+      );
       return;
     }
 
@@ -254,7 +276,9 @@ export class NotificationGeneratorService {
       where: { on_chain_event_id: eventId },
     });
     if (!event) {
-      this.logger.warn(`EventCancelled notification skipped: event ${eventId} not found`);
+      this.logger.warn(
+        `EventCancelled notification skipped: event ${eventId} not found`,
+      );
       return;
     }
 
@@ -271,6 +295,7 @@ export class NotificationGeneratorService {
     await this.queueBatchNotifications(notifications);
   }
 
+  // eslint-disable-next-line @typescript-eslint/require-await
   private async queueNotification(notification: {
     userAddress: string;
     type: NotificationType;
@@ -281,13 +306,16 @@ export class NotificationGeneratorService {
     this.notificationQueue.push({ notifications: [notification] });
   }
 
-  private async queueBatchNotifications(notifications: Array<{
-    userAddress: string;
-    type: NotificationType;
-    title: string;
-    message: string;
-    data?: Record<string, unknown>;
-  }>): Promise<void> {
+  // eslint-disable-next-line @typescript-eslint/require-await
+  private async queueBatchNotifications(
+    notifications: Array<{
+      userAddress: string;
+      type: NotificationType;
+      title: string;
+      message: string;
+      data?: Record<string, unknown>;
+    }>,
+  ): Promise<void> {
     // Split into batches
     for (let i = 0; i < notifications.length; i += this.BATCH_SIZE) {
       const batch = notifications.slice(i, i + this.BATCH_SIZE);
@@ -297,7 +325,7 @@ export class NotificationGeneratorService {
 
   private startQueueProcessor(): void {
     setInterval(() => {
-      this.processQueue();
+      void this.processQueue();
     }, this.FLUSH_INTERVAL);
   }
 
@@ -320,13 +348,15 @@ export class NotificationGeneratorService {
     }
   }
 
-  private async createNotificationsBatch(notifications: Array<{
-    userAddress: string;
-    type: NotificationType;
-    title: string;
-    message: string;
-    data?: Record<string, unknown>;
-  }>): Promise<void> {
+  private async createNotificationsBatch(
+    notifications: Array<{
+      userAddress: string;
+      type: NotificationType;
+      title: string;
+      message: string;
+      data?: Record<string, unknown>;
+    }>,
+  ): Promise<void> {
     if (notifications.length === 0) return;
 
     const entities = notifications.map((n) =>
@@ -377,7 +407,10 @@ export class NotificationGeneratorService {
           return true;
       }
     } catch (error) {
-      this.logger.error(`Error checking notification preferences for ${userAddress}`, error);
+      this.logger.error(
+        `Error checking notification preferences for ${userAddress}`,
+        error,
+      );
       return true; // Default to sending on error
     }
   }

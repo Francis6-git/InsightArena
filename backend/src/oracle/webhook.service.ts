@@ -1,11 +1,23 @@
-import { Injectable, Logger, NotFoundException, ConflictException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  NotFoundException,
+  ConflictException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { CreatorEventMatch } from '../creator-events/entities/creator-event-match.entity';
-import { WebhookMatchResultDto, WebhookResponseDto, WinningTeam } from './dto/webhook-match-result.dto';
+import {
+  WebhookMatchResultDto,
+  WebhookResponseDto,
+  WinningTeam,
+} from './dto/webhook-match-result.dto';
 import { ConfigService } from '@nestjs/config';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import { OracleSubmission, SubmissionStatus } from './entities/oracle-submission.entity';
+import {
+  OracleSubmission,
+  SubmissionStatus,
+} from './entities/oracle-submission.entity';
 
 interface QueuedSubmission {
   id: string;
@@ -38,7 +50,9 @@ export class WebhookService {
     this.startRetryProcessor();
   }
 
-  async processMatchResult(dto: WebhookMatchResultDto): Promise<WebhookResponseDto> {
+  async processMatchResult(
+    dto: WebhookMatchResultDto,
+  ): Promise<WebhookResponseDto> {
     const jobId = this.generateJobId();
 
     // Validate match exists
@@ -64,9 +78,7 @@ export class WebhookService {
     const oneHour = 60 * 60 * 1000;
 
     if (timeDiff < -oneHour) {
-      throw new ConflictException(
-        `Match ${dto.match_id} has not started yet`,
-      );
+      throw new ConflictException(`Match ${dto.match_id} has not started yet`);
     }
 
     // Queue for submission
@@ -125,18 +137,23 @@ export class WebhookService {
       );
 
       // Handle retry logic
-      await this.handleRetry(submission, error instanceof Error ? error.message : 'Unknown error');
+      await this.handleRetry(
+        submission,
+        error instanceof Error ? error.message : 'Unknown error',
+      );
     }
   }
 
-  private async simulateOracleSubmission(submission: QueuedSubmission): Promise<void> {
+  private async simulateOracleSubmission(
+    submission: QueuedSubmission,
+  ): Promise<void> {
     // This is a placeholder for the actual oracle submission logic
     // In production, this would call the Soroban contract to submit the match result
-    
+
     const startTime = Date.now();
 
     // Simulate network delay
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await new Promise((resolve) => setTimeout(resolve, 100));
 
     // Simulate occasional failure for testing retry logic (10% failure rate)
     if (Math.random() < 0.1) {
@@ -166,7 +183,10 @@ export class WebhookService {
     });
   }
 
-  private async handleRetry(submission: QueuedSubmission, error: string): Promise<void> {
+  private async handleRetry(
+    submission: QueuedSubmission,
+    error: string,
+  ): Promise<void> {
     submission.retryCount++;
     submission.lastError = error;
 
@@ -186,7 +206,9 @@ export class WebhookService {
     }
 
     // Calculate next retry time
-    const delay = this.RETRY_DELAYS[submission.retryCount - 1] || this.RETRY_DELAYS[this.RETRY_DELAYS.length - 1];
+    const delay =
+      this.RETRY_DELAYS[submission.retryCount - 1] ||
+      this.RETRY_DELAYS[this.RETRY_DELAYS.length - 1];
     submission.nextRetryAt = new Date(Date.now() + delay);
 
     this.logger.log(
@@ -199,7 +221,7 @@ export class WebhookService {
     const now = new Date();
     const jobsToRetry: QueuedSubmission[] = [];
 
-    for (const [jobId, submission] of this.submissionQueue.entries()) {
+    for (const [, submission] of this.submissionQueue.entries()) {
       if (submission.nextRetryAt <= now) {
         jobsToRetry.push(submission);
       }
@@ -241,7 +263,9 @@ export class WebhookService {
       await this.submissionRepository.save(dbSubmission);
       this.logger.log(`Submission saved to database: job_id=${submission.id}`);
     } catch (error) {
-      this.logger.error(`Failed to save submission to database: ${error instanceof Error ? error.message : 'Unknown'}`);
+      this.logger.error(
+        `Failed to save submission to database: ${error instanceof Error ? error.message : 'Unknown'}`,
+      );
     }
   }
 
@@ -259,7 +283,9 @@ export class WebhookService {
         await this.submissionRepository.save(submission);
       }
     } catch (error) {
-      this.logger.error(`Failed to update submission record: ${error instanceof Error ? error.message : 'Unknown'}`);
+      this.logger.error(
+        `Failed to update submission record: ${error instanceof Error ? error.message : 'Unknown'}`,
+      );
     }
   }
 
@@ -298,7 +324,7 @@ export class WebhookService {
     };
   }
 
-  async getJobStatus(jobId: string): Promise<QueuedSubmission | null> {
+  getJobStatus(jobId: string): QueuedSubmission | null {
     return this.submissionQueue.get(jobId) || null;
   }
 }

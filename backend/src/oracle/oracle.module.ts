@@ -12,11 +12,20 @@ import { OracleSubmission } from './entities/oracle-submission.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([CreatorEventMatch, CreatorEvent, OracleSubmission]),
+    TypeOrmModule.forFeature([
+      CreatorEventMatch,
+      CreatorEvent,
+      OracleSubmission,
+    ]),
     ScheduleModule.forRoot(),
   ],
   controllers: [OracleController],
-  providers: [OracleService, WebhookService, WebhookAuthGuard, SubmissionHistoryService],
+  providers: [
+    OracleService,
+    WebhookService,
+    WebhookAuthGuard,
+    SubmissionHistoryService,
+  ],
   exports: [OracleService, WebhookService, SubmissionHistoryService],
 })
 export class OracleModule {}

@@ -1,7 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Between, MoreThanOrEqual, LessThanOrEqual, And } from 'typeorm';
-import { OracleSubmission, SubmissionStatus } from './entities/oracle-submission.entity';
+import { Repository, MoreThanOrEqual, LessThanOrEqual, And } from 'typeorm';
+import {
+  OracleSubmission,
+  SubmissionStatus,
+} from './entities/oracle-submission.entity';
 import {
   GetSubmissionsQueryDto,
   PaginatedSubmissionsResponse,
@@ -37,7 +40,7 @@ export class SubmissionHistoryService {
     const statistics = await this.calculateStatistics(where);
 
     return {
-      data: submissions.map(this.mapToResponse),
+      data: submissions.map((s) => this.mapToResponse(s)),
       total,
       page,
       limit,
@@ -64,7 +67,7 @@ export class SubmissionHistoryService {
       if (query.dateTo) {
         if (dateCondition.created_at) {
           dateCondition.created_at = And(
-            MoreThanOrEqual(new Date(query.dateFrom)),
+            MoreThanOrEqual(new Date(query.dateFrom!)),
             LessThanOrEqual(new Date(query.dateTo)),
           );
         } else {
@@ -77,7 +80,8 @@ export class SubmissionHistoryService {
     return conditions.length > 0
       ? conditions.length === 1
         ? conditions[0]
-        : And(...conditions)
+        : // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+          And(...conditions)
       : {};
   }
 
@@ -87,12 +91,15 @@ export class SubmissionHistoryService {
     });
 
     const total = allSubmissions.length;
+
     const successful = allSubmissions.filter(
       (s) => s.status === SubmissionStatus.SUBMITTED,
     ).length;
+
     const failed = allSubmissions.filter(
       (s) => s.status === SubmissionStatus.FAILED,
     ).length;
+
     const pending = allSubmissions.filter(
       (s) => s.status === SubmissionStatus.PENDING,
     ).length;
@@ -123,6 +130,7 @@ export class SubmissionHistoryService {
       pending_submissions: pending,
       success_rate: Math.round(successRate * 100) / 100,
       average_submission_time_ms: Math.round(averageSubmissionTime),
+
       submissions_by_status: submissionsByStatus,
     };
   }

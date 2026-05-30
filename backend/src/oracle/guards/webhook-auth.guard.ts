@@ -21,7 +21,7 @@ export class WebhookAuthGuard implements CanActivate {
     }
   }
 
-  async canActivate(context: ExecutionContext): Promise<boolean> {
+  canActivate(context: ExecutionContext): boolean {
     const request = context.switchToHttp().getRequest<Request>();
     const signature = request.headers['x-webhook-signature'] as string;
     const timestamp = request.headers['x-webhook-timestamp'] as string;
@@ -49,7 +49,9 @@ export class WebhookAuthGuard implements CanActivate {
     const timeDiff = Math.abs(now - webhookTimestamp);
 
     if (timeDiff > 300) {
-      this.logger.warn(`Webhook timestamp too old or in future: ${timeDiff}s difference`);
+      this.logger.warn(
+        `Webhook timestamp too old or in future: ${timeDiff}s difference`,
+      );
       throw new UnauthorizedException('Invalid timestamp');
     }
 

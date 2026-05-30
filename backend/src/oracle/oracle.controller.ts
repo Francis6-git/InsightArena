@@ -1,4 +1,13 @@
-import { Controller, Get, Post, Query, UseGuards, Body, HttpCode, HttpStatus } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Query,
+  UseGuards,
+  Body,
+  HttpCode,
+  HttpStatus,
+} from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
@@ -13,7 +22,10 @@ import {
   ListPendingMatchesQueryDto,
   PaginatedPendingMatchesResponse,
 } from './dto/list-pending-matches-query.dto';
-import { WebhookMatchResultDto, WebhookResponseDto } from './dto/webhook-match-result.dto';
+import {
+  WebhookMatchResultDto,
+  WebhookResponseDto,
+} from './dto/webhook-match-result.dto';
 import { WebhookService } from './webhook.service';
 import { SubmissionHistoryService } from './submission-history.service';
 import {
@@ -58,7 +70,10 @@ export class OracleController {
   })
   @ApiResponse({ status: 401, description: 'Unauthorized - invalid signature' })
   @ApiResponse({ status: 404, description: 'Match not found' })
-  @ApiResponse({ status: 409, description: 'Match already resolved or not started' })
+  @ApiResponse({
+    status: 409,
+    description: 'Match already resolved or not started',
+  })
   async submitMatchResult(
     @Body() dto: WebhookMatchResultDto,
   ): Promise<WebhookResponseDto> {

@@ -495,7 +495,7 @@ export class IndexerService implements OnModuleInit {
         await this.handleMatchResultSubmitted(data);
         break;
       case 'WinnersVerified':
-        this.handleWinnersVerified(data);
+        void this.handleWinnersVerified(data);
         break;
       case 'EventCancelled':
         await this.handleEventCancelled(data);
@@ -767,7 +767,9 @@ export class IndexerService implements OnModuleInit {
     }
   }
 
-  private async handleWinnersVerified(data: Record<string, unknown>): Promise<void> {
+  private async handleWinnersVerified(
+    data: Record<string, unknown>,
+  ): Promise<void> {
     this.logger.log(
       `WinnersVerified event received for event_id=${String(data.event_id)}`,
     );

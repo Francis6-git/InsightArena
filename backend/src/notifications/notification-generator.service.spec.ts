@@ -2,13 +2,12 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { NotificationGeneratorService } from './notification-generator.service';
-import { Notification } from './entities/notification.entity';
+import { Notification, NotificationType } from './entities/notification.entity';
 import { CreatorEvent } from '../matches/entities/creator-event.entity';
 import { Match } from '../matches/entities/match.entity';
 import { MatchPrediction } from '../matches/entities/match-prediction.entity';
 import { UserPreferences } from '../users/entities/user-preferences.entity';
 import { User } from '../users/entities/user.entity';
-import { NotificationType } from './entities/notification.entity';
 
 describe('NotificationGeneratorService', () => {
   let service: NotificationGeneratorService;
@@ -16,12 +15,12 @@ describe('NotificationGeneratorService', () => {
   let creatorEventRepository: Repository<CreatorEvent>;
   let matchRepository: Repository<Match>;
   let matchPredictionRepository: Repository<MatchPrediction>;
-  let userPreferencesRepository: Repository<UserPreferences>;
   let userRepository: Repository<User>;
 
-  const mockUser = {
-    id: '1',
+  const mockUser: User = {
+    id: 'user-1',
     stellar_address: 'GABC123',
+    username: 'testuser',
     preferences: {
       event_created_notifications: true,
       match_added_notifications: true,
@@ -30,25 +29,36 @@ describe('NotificationGeneratorService', () => {
       winner_verified_notifications: true,
       event_cancelled_notifications: true,
     },
-  };
+  } as User;
 
-  const mockCreatorEvent = {
+  const mockCreatorEvent: CreatorEvent = {
     id: 'event-1',
     on_chain_event_id: 1,
     creator_address: 'GABC123',
     title: 'Test Event',
     description: 'Test Description',
-    matches: [],
-  };
+    creation_fee_paid: '100',
+    on_chain_created_at: new Date(),
+    is_active: true,
+    is_cancelled: false,
+    invite_code: null,
+    max_participants: 100,
+    participant_count: 1,
+    match_count: 1,
+  } as CreatorEvent;
 
-  const mockMatch = {
+  const mockMatch: Match = {
     id: 'match-1',
     on_chain_match_id: 1,
+    event: mockCreatorEvent,
     team_a: 'Team A',
     team_b: 'Team B',
-    event: mockCreatorEvent,
-    predictions: [],
-  };
+    match_time: new Date(),
+    result_submitted: false,
+    winning_team: null,
+    submitted_by: null,
+    submitted_at: null,
+  } as Match;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -56,37 +66,62 @@ describe('NotificationGeneratorService', () => {
         NotificationGeneratorService,
         {
           provide: getRepositoryToken(Notification),
-          useClass: Repository,
+          useValue: {
+            create: jest.fn().mockReturnValue({}),
+            save: jest.fn().mockResolvedValue({}),
+            find: jest.fn().mockResolvedValue([]),
+          },
         },
         {
           provide: getRepositoryToken(CreatorEvent),
-          useClass: Repository,
+          useValue: {
+            findOne: jest.fn().mockResolvedValue(mockCreatorEvent),
+            find: jest.fn().mockResolvedValue([mockCreatorEvent]),
+          },
         },
         {
           provide: getRepositoryToken(Match),
-          useClass: Repository,
+          useValue: {
+            findOne: jest.fn().mockResolvedValue(mockMatch),
+            find: jest.fn().mockResolvedValue([mockMatch]),
+          },
         },
         {
           provide: getRepositoryToken(MatchPrediction),
-          useClass: Repository,
+          useValue: {
+            find: jest.fn().mockResolvedValue([]),
+          },
         },
         {
           provide: getRepositoryToken(UserPreferences),
-          useClass: Repository,
+          useValue: {
+            findOne: jest.fn().mockResolvedValue(null),
+            find: jest.fn().mockResolvedValue([]),
+          },
         },
         {
           provide: getRepositoryToken(User),
-          useClass: Repository,
+          useValue: {
+            findOne: jest.fn().mockResolvedValue(mockUser),
+            find: jest.fn().mockResolvedValue([mockUser]),
+          },
         },
       ],
     }).compile();
 
-    service = module.get<NotificationGeneratorService>(NotificationGeneratorService);
-    notificationsRepository = module.get<Repository<Notification>>(getRepositoryToken(Notification));
-    creatorEventRepository = module.get<Repository<CreatorEvent>>(getRepositoryToken(CreatorEvent));
+    service = module.get<NotificationGeneratorService>(
+      NotificationGeneratorService,
+    );
+    notificationsRepository = module.get<Repository<Notification>>(
+      getRepositoryToken(Notification),
+    );
+    creatorEventRepository = module.get<Repository<CreatorEvent>>(
+      getRepositoryToken(CreatorEvent),
+    );
     matchRepository = module.get<Repository<Match>>(getRepositoryToken(Match));
-    matchPredictionRepository = module.get<Repository<MatchPrediction>>(getRepositoryToken(MatchPrediction));
-    userPreferencesRepository = module.get<Repository<UserPreferences>>(getRepositoryToken(UserPreferences));
+    matchPredictionRepository = module.get<Repository<MatchPrediction>>(
+      getRepositoryToken(MatchPrediction),
+    );
     userRepository = module.get<Repository<User>>(getRepositoryToken(User));
   });
 
@@ -107,6 +142,8 @@ describe('NotificationGeneratorService', () => {
       jest.spyOn(notificationsRepository, 'save').mockResolvedValue({} as any);
 
       await service.handleEventCreated(data);
+      // Flush the queue to process queued notifications
+      await service.flushQueue();
 
       expect(notificationsRepository.create).toHaveBeenCalled();
     });
@@ -126,11 +163,14 @@ describe('NotificationGeneratorService', () => {
         },
       };
 
-      jest.spyOn(userRepository, 'findOne').mockResolvedValue(userWithDisabledPrefs as any);
+      jest
+        .spyOn(userRepository, 'findOne')
+        .mockResolvedValue(userWithDisabledPrefs as any);
       jest.spyOn(notificationsRepository, 'create').mockReturnValue({} as any);
       jest.spyOn(notificationsRepository, 'save').mockResolvedValue({} as any);
 
       await service.handleEventCreated(data);
+      await service.flushQueue();
 
       expect(notificationsRepository.create).not.toHaveBeenCalled();
     });
@@ -142,6 +182,7 @@ describe('NotificationGeneratorService', () => {
       };
 
       await service.handleEventCreated(data);
+      await service.flushQueue();
 
       expect(notificationsRepository.create).not.toHaveBeenCalled();
     });
@@ -156,12 +197,17 @@ describe('NotificationGeneratorService', () => {
         team_b: 'Team B',
       };
 
-      jest.spyOn(creatorEventRepository, 'findOne').mockResolvedValue(mockCreatorEvent as any);
-      jest.spyOn(service as any, 'getEventParticipants').mockResolvedValue(['GABC123', 'GDEF456']);
+      jest
+        .spyOn(creatorEventRepository, 'findOne')
+        .mockResolvedValue(mockCreatorEvent as any);
+      jest
+        .spyOn(service as any, 'getEventParticipants')
+        .mockResolvedValue(['GABC123', 'GDEF456']);
       jest.spyOn(notificationsRepository, 'create').mockReturnValue({} as any);
       jest.spyOn(notificationsRepository, 'save').mockResolvedValue({} as any);
 
       await service.handleMatchAdded(data);
+      await service.flushQueue();
 
       expect(notificationsRepository.create).toHaveBeenCalled();
     });
@@ -177,6 +223,7 @@ describe('NotificationGeneratorService', () => {
       jest.spyOn(creatorEventRepository, 'findOne').mockResolvedValue(null);
 
       await service.handleMatchAdded(data);
+      await service.flushQueue();
 
       expect(notificationsRepository.create).not.toHaveBeenCalled();
     });
@@ -189,12 +236,15 @@ describe('NotificationGeneratorService', () => {
         user_address: 'GDEF456',
       };
 
-      jest.spyOn(creatorEventRepository, 'findOne').mockResolvedValue(mockCreatorEvent as any);
+      jest
+        .spyOn(creatorEventRepository, 'findOne')
+        .mockResolvedValue(mockCreatorEvent as any);
       jest.spyOn(userRepository, 'findOne').mockResolvedValue(mockUser as any);
       jest.spyOn(notificationsRepository, 'create').mockReturnValue({} as any);
       jest.spyOn(notificationsRepository, 'save').mockResolvedValue({} as any);
 
       await service.handleUserJoinedEvent(data);
+      await service.flushQueue();
 
       expect(notificationsRepository.create).toHaveBeenCalled();
     });
@@ -213,6 +263,7 @@ describe('NotificationGeneratorService', () => {
       jest.spyOn(notificationsRepository, 'save').mockResolvedValue({} as any);
 
       await service.handlePredictionSubmitted(data);
+      await service.flushQueue();
 
       expect(notificationsRepository.create).toHaveBeenCalled();
     });
@@ -235,12 +286,17 @@ describe('NotificationGeneratorService', () => {
         },
       ];
 
-      jest.spyOn(matchRepository, 'findOne').mockResolvedValue(mockMatch as any);
-      jest.spyOn(matchPredictionRepository, 'find').mockResolvedValue(mockPredictions as any);
+      jest
+        .spyOn(matchRepository, 'findOne')
+        .mockResolvedValue(mockMatch as any);
+      jest
+        .spyOn(matchPredictionRepository, 'find')
+        .mockResolvedValue(mockPredictions as any);
       jest.spyOn(notificationsRepository, 'create').mockReturnValue({} as any);
       jest.spyOn(notificationsRepository, 'save').mockResolvedValue({} as any);
 
       await service.handleMatchResultSubmitted(data);
+      await service.flushQueue();
 
       expect(notificationsRepository.create).toHaveBeenCalled();
     });
@@ -267,12 +323,17 @@ describe('NotificationGeneratorService', () => {
         ],
       };
 
-      jest.spyOn(creatorEventRepository, 'findOne').mockResolvedValue(mockCreatorEvent as any);
-      jest.spyOn(matchRepository, 'find').mockResolvedValue([mockMatchWithPrediction] as any);
+      jest
+        .spyOn(creatorEventRepository, 'findOne')
+        .mockResolvedValue(mockCreatorEvent as any);
+      jest
+        .spyOn(matchRepository, 'find')
+        .mockResolvedValue([mockMatchWithPrediction] as any);
       jest.spyOn(notificationsRepository, 'create').mockReturnValue({} as any);
       jest.spyOn(notificationsRepository, 'save').mockResolvedValue({} as any);
 
       await service.handleWinnersVerified(data);
+      await service.flushQueue();
 
       expect(notificationsRepository.create).toHaveBeenCalled();
     });
@@ -284,12 +345,17 @@ describe('NotificationGeneratorService', () => {
         event_id: 1,
       };
 
-      jest.spyOn(creatorEventRepository, 'findOne').mockResolvedValue(mockCreatorEvent as any);
-      jest.spyOn(service as any, 'getEventParticipants').mockResolvedValue(['GABC123', 'GDEF456']);
+      jest
+        .spyOn(creatorEventRepository, 'findOne')
+        .mockResolvedValue(mockCreatorEvent as any);
+      jest
+        .spyOn(service as any, 'getEventParticipants')
+        .mockResolvedValue(['GABC123', 'GDEF456']);
       jest.spyOn(notificationsRepository, 'create').mockReturnValue({} as any);
       jest.spyOn(notificationsRepository, 'save').mockResolvedValue({} as any);
 
       await service.handleEventCancelled(data);
+      await service.flushQueue();
 
       expect(notificationsRepository.create).toHaveBeenCalled();
     });
@@ -308,6 +374,7 @@ describe('NotificationGeneratorService', () => {
       jest.spyOn(notificationsRepository, 'save').mockResolvedValue({} as any);
 
       await service['queueBatchNotifications'](notifications);
+      await service.flushQueue();
 
       expect(notificationsRepository.create).toHaveBeenCalled();
     });
@@ -315,11 +382,20 @@ describe('NotificationGeneratorService', () => {
 
   describe('flushQueue', () => {
     it('should flush all queued notifications', async () => {
-      jest.spyOn(service as any, 'processQueue').mockResolvedValue(undefined);
+      // Queue some notifications first
+      await service['queueNotification']({
+        userAddress: 'GABC123',
+        type: NotificationType.EventCreated,
+        title: 'Test',
+        message: 'Test message',
+      });
+
+      jest.spyOn(notificationsRepository, 'create').mockReturnValue({} as any);
+      jest.spyOn(notificationsRepository, 'save').mockResolvedValue({} as any);
 
       await service.flushQueue();
 
-      expect(service['processQueue']).toHaveBeenCalled();
+      expect(notificationsRepository.create).toHaveBeenCalled();
     });
   });
 });

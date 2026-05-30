@@ -1,27 +1,41 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
 import { WebhookService } from './webhook.service';
 import { CreatorEventMatch } from '../creator-events/entities/creator-event-match.entity';
+import { OracleSubmission } from './entities/oracle-submission.entity';
 import { ConfigService } from '@nestjs/config';
-import { WebhookMatchResultDto, WinningTeam } from './dto/webhook-match-result.dto';
+import {
+  WebhookMatchResultDto,
+  WinningTeam,
+} from './dto/webhook-match-result.dto';
 import { NotFoundException, ConflictException } from '@nestjs/common';
 
 describe('WebhookService', () => {
   let service: WebhookService;
-  let matchRepository: Repository<CreatorEventMatch>;
-  let configService: ConfigService;
 
   const mockMatch = {
     id: 'match-1',
     on_chain_match_id: '123',
     team_a: 'Team A',
     team_b: 'Team B',
-    match_time: new Date(Date.now() - 3600000), // 1 hour ago
+    match_time: new Date(Date.now() - 3600000),
     result_submitted: false,
     winning_team: null,
     prediction_count: 10,
     created_at: new Date(),
+  };
+
+  const mockMatchRepository = {
+    findOne: jest.fn().mockResolvedValue(mockMatch),
+    save: jest.fn().mockResolvedValue(mockMatch),
+  };
+
+  const mockSubmissionRepository = {
+    create: jest.fn().mockReturnValue({}),
+    save: jest.fn().mockResolvedValue({}),
+    findOne: jest.fn().mockResolvedValue(null),
+    find: jest.fn().mockResolvedValue([]),
+    findAndCount: jest.fn().mockResolvedValue([[], 0]),
   };
 
   beforeEach(async () => {
@@ -30,7 +44,11 @@ describe('WebhookService', () => {
         WebhookService,
         {
           provide: getRepositoryToken(CreatorEventMatch),
-          useClass: Repository,
+          useValue: mockMatchRepository,
+        },
+        {
+          provide: getRepositoryToken(OracleSubmission),
+          useValue: mockSubmissionRepository,
         },
         {
           provide: ConfigService,
@@ -45,8 +63,6 @@ describe('WebhookService', () => {
     }).compile();
 
     service = module.get<WebhookService>(WebhookService);
-    matchRepository = module.get<Repository<CreatorEventMatch>>(getRepositoryToken(CreatorEventMatch));
-    configService = module.get<ConfigService>(ConfigService);
   });
 
   it('should be defined', () => {
@@ -63,9 +79,9 @@ describe('WebhookService', () => {
         timestamp: new Date().toISOString(),
       };
 
-      jest.spyOn(matchRepository, 'findOne').mockResolvedValue(mockMatch as any);
-      jest.spyOn(matchRepository, 'save').mockResolvedValue(mockMatch as any);
-      jest.spyOn(service as any, 'simulateOracleSubmission').mockResolvedValue(undefined);
+      jest
+        .spyOn(service as any, 'simulateOracleSubmission')
+        .mockResolvedValue(undefined);
 
       const result = await service.processMatchResult(dto);
 
@@ -83,9 +99,11 @@ describe('WebhookService', () => {
         timestamp: new Date().toISOString(),
       };
 
-      jest.spyOn(matchRepository, 'findOne').mockResolvedValue(null);
+      mockMatchRepository.findOne.mockResolvedValue(null);
 
-      await expect(service.processMatchResult(dto)).rejects.toThrow(NotFoundException);
+      await expect(service.processMatchResult(dto)).rejects.toThrow(
+        NotFoundException,
+      );
     });
 
     it('should throw ConflictException if match already resolved', async () => {
@@ -98,13 +116,18 @@ describe('WebhookService', () => {
         timestamp: new Date().toISOString(),
       };
 
-      jest.spyOn(matchRepository, 'findOne').mockResolvedValue(resolvedMatch as any);
+      mockMatchRepository.findOne.mockResolvedValue(resolvedMatch);
 
-      await expect(service.processMatchResult(dto)).rejects.toThrow(ConflictException);
+      await expect(service.processMatchResult(dto)).rejects.toThrow(
+        ConflictException,
+      );
     });
 
     it('should throw ConflictException if match has not started', async () => {
-      const futureMatch = { ...mockMatch, match_time: new Date(Date.now() + 7200000) }; // 2 hours in future
+      const futureMatch = {
+        ...mockMatch,
+        match_time: new Date(Date.now() + 7200000),
+      };
       const dto: WebhookMatchResultDto = {
         match_id: '123',
         winning_team: WinningTeam.TEAM_A,
@@ -113,13 +136,18 @@ describe('WebhookService', () => {
         timestamp: new Date().toISOString(),
       };
 
-      jest.spyOn(matchRepository, 'findOne').mockResolvedValue(futureMatch as any);
+      mockMatchRepository.findOne.mockResolvedValue(futureMatch);
 
-      await expect(service.processMatchResult(dto)).rejects.toThrow(ConflictException);
+      await expect(service.processMatchResult(dto)).rejects.toThrow(
+        ConflictException,
+      );
     });
 
     it('should accept match result if match time is within 1 hour buffer', async () => {
-      const futureMatch = { ...mockMatch, match_time: new Date(Date.now() + 1800000) }; // 30 minutes in future
+      const futureMatch = {
+        ...mockMatch,
+        match_time: new Date(Date.now() + 1800000),
+      };
       const dto: WebhookMatchResultDto = {
         match_id: '123',
         winning_team: WinningTeam.TEAM_A,
@@ -128,9 +156,10 @@ describe('WebhookService', () => {
         timestamp: new Date().toISOString(),
       };
 
-      jest.spyOn(matchRepository, 'findOne').mockResolvedValue(futureMatch as any);
-      jest.spyOn(matchRepository, 'save').mockResolvedValue(futureMatch as any);
-      jest.spyOn(service as any, 'simulateOracleSubmission').mockResolvedValue(undefined);
+      mockMatchRepository.findOne.mockResolvedValue(futureMatch);
+      jest
+        .spyOn(service as any, 'simulateOracleSubmission')
+        .mockResolvedValue(undefined);
 
       const result = await service.processMatchResult(dto);
 
@@ -148,18 +177,15 @@ describe('WebhookService', () => {
         timestamp: new Date().toISOString(),
       };
 
-      jest.spyOn(matchRepository, 'findOne').mockResolvedValue(mockMatch as any);
-      jest.spyOn(matchRepository, 'save').mockResolvedValue(mockMatch as any);
-      
-      // Simulate failure on first attempt
-      jest.spyOn(service as any, 'simulateOracleSubmission')
+      jest
+        .spyOn(service as any, 'simulateOracleSubmission')
         .mockRejectedValueOnce(new Error('Submission failed'))
         .mockResolvedValue(undefined);
 
       const result = await service.processMatchResult(dto);
 
       expect(result.status).toBe('accepted');
-      
+
       const queueStatus = service.getQueueStatus();
       expect(queueStatus.total).toBeGreaterThan(0);
     });
@@ -173,15 +199,15 @@ describe('WebhookService', () => {
         timestamp: new Date().toISOString(),
       };
 
-      jest.spyOn(matchRepository, 'findOne').mockResolvedValue(mockMatch as any);
-      jest.spyOn(service as any, 'simulateOracleSubmission').mockRejectedValue(new Error('Submission failed'));
+      jest
+        .spyOn(service as any, 'simulateOracleSubmission')
+        .mockRejectedValue(new Error('Submission failed'));
 
       await service.processMatchResult(dto);
 
-      // Manually trigger retry processing to exhaust retries
       const jobId = service.getQueueStatus().jobs[0].id;
       for (let i = 0; i < 4; i++) {
-        const job = await service.getJobStatus(jobId);
+        const job = service.getJobStatus(jobId);
         if (job) {
           await service['submitToOracle'](job);
         }
@@ -212,19 +238,21 @@ describe('WebhookService', () => {
         timestamp: new Date().toISOString(),
       };
 
-      jest.spyOn(matchRepository, 'findOne').mockResolvedValue(mockMatch as any);
-      jest.spyOn(matchRepository, 'save').mockResolvedValue(mockMatch as any);
-      jest.spyOn(service as any, 'simulateOracleSubmission').mockResolvedValue(undefined);
+      jest
+        .spyOn(service as any, 'submitToOracle')
+        .mockImplementation(async () => {
+          // Do nothing to keep the job in the queue
+        });
 
       const result = await service.processMatchResult(dto);
-      const job = await service.getJobStatus(result.job_id);
+      const job = service.getJobStatus(result.job_id);
 
       expect(job).not.toBeNull();
       expect(job?.matchId).toBe('123');
     });
 
-    it('should return null for non-existent job ID', async () => {
-      const job = await service.getJobStatus('non-existent-job-id');
+    it('should return null for non-existent job ID', () => {
+      const job = service.getJobStatus('non-existent-job-id');
       expect(job).toBeNull();
     });
   });

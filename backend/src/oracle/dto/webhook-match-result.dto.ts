@@ -1,4 +1,4 @@
-import { IsString, IsInt, IsOptional, IsEnum, Min, Max, IsUrl } from 'class-validator';
+import { IsString, IsInt, IsOptional, IsEnum, Min, Max } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export enum WinningTeam {
