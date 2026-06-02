@@ -451,9 +451,46 @@ impl CreatorEventManagerContract {
         prediction::get_prediction_distribution(&env, match_id)
     }
 
+    /// Retrieve every prediction submitted for a specific match (#808).
+    ///
+    /// Returns a `Vec<Prediction>` in submission order. Returns an empty `Vec`
+    /// when the match has no predictions (or the match id does not exist).
+    /// Useful for analytics and displaying a match's full prediction
+    /// distribution.
+    pub fn get_match_predictions(env: Env, match_id: u64) -> Vec<Prediction> {
+        prediction::get_match_predictions(&env, match_id)
+    }
+
     // =========================================================================
-    // Oracle / Winner Verification (#798–#801)
+    // Oracle / Winner Verification (#798–#801, #810)
     // =========================================================================
+
+    /// Submit a match result as the authorized AI oracle agent (#810).
+    ///
+    /// Resolves the match, records the winning outcome, and grades every
+    /// prediction for the match (sets each `is_correct`). `winning_team` must be
+    /// one of the `TEAM_A`, `TEAM_B`, or `DRAW` symbols, and the match must have
+    /// started (current time >= match_time).
+    ///
+    /// # Panics
+    /// * `"contract_paused"` — the contract is paused.
+    /// * `"unauthorized"` — caller is not the configured AI agent.
+    /// * `"match_not_found"` — no match exists with the given ID.
+    /// * `"result_already_submitted"` — a result was already submitted.
+    /// * `"match_not_started"` — current time is before the match start time.
+    /// * `"invalid_outcome"` — `winning_team` is not a valid outcome symbol.
+    pub fn submit_match_result(env: Env, caller: Address, match_id: u64, winning_team: Symbol) {
+        match oracle::submit_match_result(&env, caller, match_id, winning_team) {
+            Ok(()) => {}
+            Err(oracle::OracleError::Paused) => panic!("contract_paused"),
+            Err(oracle::OracleError::Unauthorized) => panic!("unauthorized"),
+            Err(oracle::OracleError::MatchNotFound) => panic!("match_not_found"),
+            Err(oracle::OracleError::ResultAlreadySubmitted) => panic!("result_already_submitted"),
+            Err(oracle::OracleError::MatchNotStarted) => panic!("match_not_started"),
+            Err(oracle::OracleError::InvalidOutcome) => panic!("invalid_outcome"),
+            Err(_) => panic!("unexpected_error"),
+        }
+    }
 
     /// Verify and record all perfect scorers for an event.
     ///

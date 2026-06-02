@@ -2,7 +2,7 @@ use soroban_sdk::{Address, Env, Symbol, Vec};
 
 use crate::admin;
 use crate::storage::{self, StorageError};
-use crate::storage_types::{DataKey, Event, Match, Winner};
+use crate::storage_types::{DataKey, Event, Match, MatchResult, Winner};
 
 // ---------------------------------------------------------------------------
 // Error type
@@ -23,6 +23,16 @@ pub enum OracleError {
     CreationFeeNotSet = 5,
     /// Arithmetic overflow occurred during calculation.
     Overflow = 6,
+    /// Caller is not the authorized AI agent. (#810)
+    Unauthorized = 7,
+    /// No match found for the given match_id. (#810)
+    MatchNotFound = 8,
+    /// A result has already been submitted for this match. (#810)
+    ResultAlreadySubmitted = 9,
+    /// The match has not started yet (current time < match_time). (#810)
+    MatchNotStarted = 10,
+    /// The provided outcome is not one of TEAM_A, TEAM_B, or DRAW. (#810)
+    InvalidOutcome = 11,
 }
 
 impl From<StorageError> for OracleError {
@@ -43,6 +53,122 @@ fn emit_winners_verified(env: &Env, event_id: u64, winner_count: u32) {
         ),
         (event_id, winner_count),
     );
+}
+
+fn emit_match_result_submitted(
+    env: &Env,
+    match_id: u64,
+    winning_team: &Symbol,
+    submitted_by: &Address,
+) {
+    env.events().publish(
+        (
+            Symbol::new(env, "match"),
+            Symbol::new(env, "result_submitted"),
+        ),
+        (match_id, winning_team.clone(), submitted_by.clone()),
+    );
+}
+
+// ---------------------------------------------------------------------------
+// submit_match_result (#810)
+// ---------------------------------------------------------------------------
+
+/// Map an outcome `Symbol` ("TEAM_A" / "TEAM_B" / "DRAW") to a [`MatchResult`].
+///
+/// Returns `None` for any symbol that is not one of the three valid outcomes.
+fn symbol_to_result(env: &Env, outcome: &Symbol) -> Option<MatchResult> {
+    if *outcome == Symbol::new(env, crate::storage_types::OUTCOME_TEAM_A) {
+        Some(MatchResult::TeamA)
+    } else if *outcome == Symbol::new(env, crate::storage_types::OUTCOME_TEAM_B) {
+        Some(MatchResult::TeamB)
+    } else if *outcome == Symbol::new(env, crate::storage_types::OUTCOME_DRAW) {
+        Some(MatchResult::Draw)
+    } else {
+        None
+    }
+}
+
+/// Submit a match result as the authorized AI oracle agent (#810).
+///
+/// This is the core oracle function that resolves a match and grades every
+/// prediction made for it.
+///
+/// # Flow
+/// 1. Require caller authorization.
+/// 2. Reject if the contract is paused.
+/// 3. Reject if the caller is not the stored AI agent address.
+/// 4. Retrieve the match and verify it exists.
+/// 5. Verify a result has not already been submitted.
+/// 6. Verify the match has started (`now >= match_time`).
+/// 7. Validate `winning_team` is one of TEAM_A / TEAM_B / DRAW.
+/// 8. Update the match (result_submitted, winning_team, submitted_by/at).
+/// 9. Grade every prediction for the match (`is_correct`).
+/// 10. Emit a `MatchResultSubmitted` event.
+///
+/// # Errors
+/// * [`OracleError::Paused`] — the contract is paused.
+/// * [`OracleError::Unauthorized`] — caller is not the AI agent.
+/// * [`OracleError::MatchNotFound`] — no match with the given id.
+/// * [`OracleError::ResultAlreadySubmitted`] — result already recorded.
+/// * [`OracleError::MatchNotStarted`] — match has not started yet.
+/// * [`OracleError::InvalidOutcome`] — `winning_team` is not a valid outcome.
+pub fn submit_match_result(
+    env: &Env,
+    caller: Address,
+    match_id: u64,
+    winning_team: Symbol,
+) -> Result<(), OracleError> {
+    caller.require_auth();
+
+    // 1. Contract must not be paused.
+    if admin::is_paused(env) {
+        return Err(OracleError::Paused);
+    }
+
+    // 2. Caller must be the authorized AI agent.
+    let ai_agent = admin::get_ai_agent(env).ok_or(OracleError::Unauthorized)?;
+    if caller != ai_agent {
+        return Err(OracleError::Unauthorized);
+    }
+
+    // 3. Match must exist.
+    let mut match_record: Match =
+        storage::get_match(env, match_id).map_err(|_| OracleError::MatchNotFound)?;
+
+    // 4. Result must not already be submitted.
+    if match_record.result_submitted {
+        return Err(OracleError::ResultAlreadySubmitted);
+    }
+
+    // 5. Match must have started.
+    let now = env.ledger().timestamp();
+    if now < match_record.match_time {
+        return Err(OracleError::MatchNotStarted);
+    }
+
+    // 6. Outcome must be valid.
+    let result = symbol_to_result(env, &winning_team).ok_or(OracleError::InvalidOutcome)?;
+
+    // 7. Record the result on the match.
+    match_record
+        .submit_result(result, caller.clone(), now)
+        .map_err(|_| OracleError::ResultAlreadySubmitted)?;
+    storage::set_match(env, match_id, &match_record);
+
+    // 8. Grade every prediction submitted for this match.
+    let prediction_ids = storage::get_match_predictions(env, match_id);
+    for prediction_id in prediction_ids.iter() {
+        if let Ok(mut prediction) = storage::get_prediction(env, prediction_id) {
+            prediction.grade(&winning_team);
+            storage::set_prediction(env, prediction_id, &prediction);
+        }
+    }
+
+    // 9. Emit the result event.
+    emit_match_result_submitted(env, match_id, &winning_team, &caller);
+
+    Ok(())
 }
 
 // ---------------------------------------------------------------------------
