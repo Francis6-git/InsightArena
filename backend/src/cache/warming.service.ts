@@ -41,12 +41,11 @@ export class CacheWarmingService {
     this.logger.log('Cache warming started');
     const result: CacheWarmResult = { warmed: [], failed: [] };
 
-    const [activeEvents, trendingEvents, platformStatistics] =
-      await Promise.all([
-        this.warmActiveEvents(result),
-        this.warmTrendingEvents(result),
-        this.warmPlatformStatistics(result),
-      ]);
+    const [, trendingEvents] = await Promise.all([
+      this.warmActiveEvents(result),
+      this.warmTrendingEvents(result),
+      this.warmPlatformStatistics(result),
+    ]);
 
     await this.warmPopularEventDetails(result, trendingEvents?.data ?? []);
 
