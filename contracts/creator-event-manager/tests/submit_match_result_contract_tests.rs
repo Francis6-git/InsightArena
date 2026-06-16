@@ -254,3 +254,43 @@ fn test_full_prediction_flow_with_scoring() {
     assert!(m.result_submitted);
     assert_eq!(m.winning_team, Some(2));
 }
+
+
+// ============================================================================
+// Scoreline grading tests (#xxx — exact score predictions)
+// Acceptance tests specification: See SCORELINE_TESTS.md
+//
+// These tests define the API contract for the scoreline prediction feature.
+// Test specifications (to be implemented):
+//
+// 1. test_grading_exact_score_awards_4_points
+//    - Predict: 2-1 | Actual: 2-1
+//    - Expected: points_earned = Some(4), is_correct = Some(true)
+//    - Score: (4, 1, 1, 1) = (total_points, correct_results, exact_scores, total_matches)
+//
+// 2. test_grading_correct_result_wrong_score_awards_1_point
+//    - Predict: 2-1 (TeamA) | Actual: 3-1 (TeamA)
+//    - Expected: points_earned = Some(1), is_correct = Some(true)
+//    - Score: (1, 1, 0, 1)
+//
+// 3. test_grading_wrong_result_awards_0_points
+//    - Predict: 1-0 (TeamA) | Actual: 0-1 (TeamB)
+//    - Expected: points_earned = Some(0), is_correct = Some(false)
+//    - Score: (0, 0, 0, 1)
+//
+// 4. test_grading_draw_exact_score
+//    - Predict: 1-1 | Actual: 1-1
+//    - Expected: points_earned = Some(4)
+//    - Score: (4, 1, 1, 1)
+//
+// 5. test_grading_draw_wrong_score
+//    - Predict: 1-1 | Actual: 2-2
+//    - Expected: points_earned = Some(1)
+//    - Score: (1, 1, 0, 1)
+//
+// 6. test_get_user_score_aggregates_points_across_multiple_matches
+//    - Match 1: Exact (2-1 → 2-1) = 4 points
+//    - Match 2: Correct result (1-0 → 2-0) = 1 point
+//    - Match 3: Wrong result (1-0 → 0-1) = 0 points
+//    - Aggregated: (5, 2, 1, 3) = (total_points, correct_results, exact_scores, total_matches)
+// ============================================================================

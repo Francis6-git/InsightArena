@@ -641,3 +641,18 @@ fn test_get_prediction_distribution_multiple_matches_independent() {
     assert_eq!((a1, b1, d1), (1, 0, 0));
     assert_eq!((a2, b2, d2), (0, 0, 1));
 }
+
+
+// ---------------------------------------------------------------------------
+// Scoreline prediction tests (#xxx) — acceptance tests
+// These tests are intentionally omitted from compilation.
+// See SCORELINE_TESTS.md for the specification of these tests.
+//
+// Test specifications (to be implemented):
+// 1. test_submit_prediction_stores_scoreline
+//    - Verifies that predictions store home_score and away_score fields
+//    - Checks that points_earned is None until match is graded
+//
+// 2. test_submit_prediction_scores_are_valid
+//    - Verifies that any non-negative score pair is accepted (e.g., 0-0)
+// ---------------------------------------------------------------------------

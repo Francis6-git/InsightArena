@@ -579,3 +579,22 @@ fn test_get_user_score_zero_score_handled() {
     assert_eq!(correct, 0);
     assert_eq!(total, 1);
 }
+
+
+// ============================================================================
+// Scoreline grading additional tests (#xxx)
+// ============================================================================
+
+
+
+// ============================================================================
+// Scoreline grading additional tests (#xxx)
+// Acceptance test specification: See SCORELINE_TESTS.md
+//
+// Test specification:
+// test_grading_multiple_predictions_different_scores
+// - Multiple predictors with different accuracy levels:
+//   - User 1 (exact): predicts 2-1, actual 2-1 → (4, 1, 1, 1)
+//   - User 2 (result): predicts 3-0, actual 2-1 → (1, 1, 0, 1)
+//   - User 3 (wrong): predicts 0-1, actual 2-1 → (0, 0, 0, 1)
+// ============================================================================

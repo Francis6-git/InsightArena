@@ -1,8 +1,125 @@
-use soroban_sdk::{Env, Vec};
+use soroban_sdk::{Address, Env, String, Symbol, Vec};
 
+use crate::admin;
 use crate::event::{self, EventError};
 use crate::storage::{self};
 use crate::storage_types::Match;
+
+// ---------------------------------------------------------------------------
+// Error type
+// ---------------------------------------------------------------------------
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[repr(u32)]
+pub enum MatchError {
+    /// Contract is paused; no new matches may be created.
+    Paused = 1,
+    /// No event found for the given event_id.
+    EventNotFound = 2,
+    /// Event has been cancelled.
+    EventCancelled = 3,
+    /// Caller is not the event creator.
+    Unauthorized = 4,
+    /// Team names are invalid (empty, too long, or identical).
+    InvalidTeamNames = 5,
+    /// Match time is invalid (in the past or outside event window).
+    InvalidMatchTime = 6,
+}
+
+// ---------------------------------------------------------------------------
+// create_match (#964)
+// ---------------------------------------------------------------------------
+
+/// Create a new match within an event.
+///
+/// # Flow
+/// 1. Require caller's authorization.
+/// 2. Reject if the contract is paused.
+/// 3. Load the event; verify it exists and is not cancelled.
+/// 4. Verify caller is the event creator.
+/// 5. Validate team names via Match::validate() plus team_a != team_b check.
+/// 6. Validate match_time is in the future.
+/// 7. Assign a new match_id via storage::next_match_id.
+/// 8. Build the Match via Match::new().
+/// 9. Persist via storage::set_match().
+/// 10. Update event.match_count and re-persist.
+/// 11. Index the match in EventMatches via storage::add_event_match().
+/// 12. Emit ("match", "created") with (match_id, event_id, team_a, team_b, match_time).
+/// 13. Return match_id.
+pub fn create_match(
+    env: &Env,
+    caller: Address,
+    event_id: u64,
+    team_a: String,
+    team_b: String,
+    match_time: u64,
+) -> Result<u64, MatchError> {
+    // Step 1: Require authorization
+    caller.require_auth();
+
+    // Step 2: Check if contract is paused
+    if admin::is_paused(env) {
+        return Err(MatchError::Paused);
+    }
+
+    // Step 3: Load the event
+    let event = event::get_event(env, event_id).map_err(|_| MatchError::EventNotFound)?;
+
+    // Verify event is not cancelled
+    if event.is_cancelled {
+        return Err(MatchError::EventCancelled);
+    }
+
+    // Step 4: Verify caller is the event creator
+    if caller != event.creator {
+        return Err(MatchError::Unauthorized);
+    }
+
+    // Step 5: Validate team names
+    // Check for empty or too long names
+    if team_a.len() == 0 || team_a.len() > crate::storage_types::MAX_TEAM_NAME_LEN {
+        return Err(MatchError::InvalidTeamNames);
+    }
+    if team_b.len() == 0 || team_b.len() > crate::storage_types::MAX_TEAM_NAME_LEN {
+        return Err(MatchError::InvalidTeamNames);
+    }
+    // Check that teams are different
+    if team_a == team_b {
+        return Err(MatchError::InvalidTeamNames);
+    }
+
+    // Step 6: Validate match_time is in the future
+    let current_time = env.ledger().timestamp();
+    if match_time <= current_time {
+        return Err(MatchError::InvalidMatchTime);
+    }
+
+    // Step 7: Assign a new match_id
+    let match_id = storage::next_match_id(env);
+
+    // Step 8: Build the Match
+    let m = Match::new(match_id, event_id, team_a.clone(), team_b.clone(), match_time);
+
+    // Step 9: Persist the match
+    storage::set_match(env, match_id, &m);
+
+    // Step 10: Update event and re-persist
+    let mut updated_event = event;
+    updated_event.add_match();
+    storage::set_event(env, event_id, &updated_event);
+
+    // Step 11: Index the match
+    storage::add_event_match(env, event_id, match_id);
+
+    // Step 12: Emit event
+    env.events().publish(
+        (Symbol::new(env, "match"), Symbol::new(env, "created")),
+        (match_id, event_id, team_a, team_b, match_time),
+    );
+
+    // Step 13: Return match_id
+    Ok(match_id)
+}
 
 /// Return the number of matches currently stored for an event.
 ///
