@@ -416,13 +416,23 @@ impl CreatorEventManagerContract {
     }
 
     /// Submit a prediction for a match in an event.
+    ///
+    /// Takes a predicted scoreline (predicted_home_score, predicted_away_score).
+    /// Returns the prediction ID.
     pub fn submit_prediction(
         env: Env,
         predictor: Address,
         match_id: u64,
-        predicted_outcome: Symbol,
+        predicted_home_score: u32,
+        predicted_away_score: u32,
     ) -> u64 {
-        match prediction::submit_prediction(&env, predictor, match_id, predicted_outcome) {
+        match prediction::submit_prediction(
+            &env,
+            predictor,
+            match_id,
+            predicted_home_score,
+            predicted_away_score,
+        ) {
             Ok(prediction_id) => prediction_id,
             Err(prediction::PredictionError::Paused) => panic!("paused"),
             Err(prediction::PredictionError::MatchNotFound) => panic!("match_not_found"),
@@ -430,7 +440,6 @@ impl CreatorEventManagerContract {
             Err(prediction::PredictionError::EventCancelled) => panic!("event_cancelled"),
             Err(prediction::PredictionError::NotJoined) => panic!("not_joined"),
             Err(prediction::PredictionError::MatchStarted) => panic!("match_started"),
-            Err(prediction::PredictionError::InvalidOutcome) => panic!("invalid_outcome"),
             Err(prediction::PredictionError::AlreadyPredicted) => panic!("already_predicted"),
             Err(_) => panic!("unexpected_error"),
         }
@@ -481,12 +490,12 @@ impl CreatorEventManagerContract {
     // Oracle / Winner Verification (#798–#801, #810)
     // =========================================================================
 
-    /// Submit a match result as the authorized AI oracle agent (#810).
+    /// Submit a match result as the authorized AI oracle agent (#810, #966).
     ///
-    /// Resolves the match, records the winning outcome, and grades every
-    /// prediction for the match (sets each `is_correct`). `winning_team` must be
-    /// one of the `TEAM_A`, `TEAM_B`, or `DRAW` symbols, and the match must have
-    /// started (current time >= match_time).
+    /// Resolves the match with a final scoreline (home_score, away_score),
+    /// records the winning outcome (derived from the scores), and grades every
+    /// prediction for the match (sets each `is_correct` and `points_earned`).
+    /// The match must have started (current time >= match_time).
     ///
     /// # Panics
     /// * `"contract_paused"` — the contract is paused.
@@ -494,16 +503,14 @@ impl CreatorEventManagerContract {
     /// * `"match_not_found"` — no match exists with the given ID.
     /// * `"result_already_submitted"` — a result was already submitted.
     /// * `"match_not_started"` — current time is before the match start time.
-    /// * `"invalid_outcome"` — `winning_team` is not a valid outcome symbol.
-    pub fn submit_match_result(env: Env, caller: Address, match_id: u64, winning_team: Symbol) {
-        match oracle::submit_match_result(&env, caller, match_id, winning_team) {
+    pub fn submit_match_result(env: Env, caller: Address, match_id: u64, home_score: u32, away_score: u32) {
+        match oracle::submit_match_result(&env, caller, match_id, home_score, away_score) {
             Ok(()) => {}
             Err(oracle::OracleError::Paused) => panic!("contract_paused"),
             Err(oracle::OracleError::Unauthorized) => panic!("unauthorized"),
             Err(oracle::OracleError::MatchNotFound) => panic!("match_not_found"),
             Err(oracle::OracleError::ResultAlreadySubmitted) => panic!("result_already_submitted"),
             Err(oracle::OracleError::MatchNotStarted) => panic!("match_not_started"),
-            Err(oracle::OracleError::InvalidOutcome) => panic!("invalid_outcome"),
             Err(_) => panic!("unexpected_error"),
         }
     }
@@ -545,15 +552,19 @@ impl CreatorEventManagerContract {
         }
     }
 
-    /// Calculate a user's score (correct predictions) for an event.
+    /// Calculate a user's score and statistics for an event.
     ///
-    /// Useful for partial scoring and leaderboards.
+    /// Returns a tuple `(total_points, correct_results, exact_scores, total_matches)` where:
+    /// - `total_points`: Sum of points earned from all predictions (0, 1, or 4 per match).
+    /// - `correct_results`: Number of matches with correct 1X2 result.
+    /// - `exact_scores`: Number of matches with exact scoreline prediction.
+    /// - `total_matches`: Total number of matches in the event.
     ///
-    /// Returns a tuple `(correct_count, total_matches)`.
+    /// Useful for scoring and leaderboards.
     ///
     /// # Panics
     /// * `"event_not_found"` — no event exists with the given ID.
-    pub fn get_user_score(env: Env, user: Address, event_id: u64) -> (u32, u32) {
+    pub fn get_user_score(env: Env, user: Address, event_id: u64) -> (u32, u32, u32, u32) {
         match oracle::get_user_score(&env, user, event_id) {
             Ok(score) => score,
             Err(oracle::OracleError::EventNotFound) => panic!("event_not_found"),
