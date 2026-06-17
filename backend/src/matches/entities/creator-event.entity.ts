@@ -16,6 +16,8 @@ import { Match } from './match.entity';
 @Index(['creator_address', 'created_at'])
 @Index(['participant_count'])
 @Index(['match_count'])
+@Index(['is_finalized'])
+@Index(['end_time'])
 export class CreatorEvent {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -38,6 +40,9 @@ export class CreatorEvent {
   @Column({ type: 'timestamptz' })
   on_chain_created_at: Date;
 
+  @Column({ type: 'timestamptz', nullable: true })
+  end_time: Date | null;
+
   @Column({ default: true })
   is_active: boolean;
 
@@ -55,6 +60,9 @@ export class CreatorEvent {
 
   @Column({ default: 0 })
   match_count: number;
+
+  @Column({ default: false })
+  is_finalized: boolean;
 
   @OneToMany(() => Match, (match) => match.event)
   matches: Match[];
