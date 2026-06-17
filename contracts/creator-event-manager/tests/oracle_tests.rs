@@ -92,18 +92,26 @@ fn create_event_with_match(
 
 fn submit_match_result(
     env: &Env,
-    contract_id: &Address,
+    client: &CreatorEventManagerContractClient<'static>,
     ai_agent: &Address,
     match_id: u64,
     result: MatchResult,
 ) {
-    env.as_contract(contract_id, || {
-        let mut match_record = storage::get_match(env, match_id).expect("match exists");
-        match_record
-            .submit_result(result, ai_agent.clone(), env.ledger().timestamp())
-            .expect("result submission");
-        storage::set_match(env, match_id, &match_record);
-    });
+    let (home_score, away_score) = match result {
+        MatchResult::TeamA => (2, 1),   // Default: Team A wins 2-1
+        MatchResult::TeamB => (1, 2),   // Default: Team B wins 1-2
+        MatchResult::Draw => (1, 1),    // Default: 1-1 draw
+    };
+    client.submit_match_result(ai_agent, &match_id, &home_score, &away_score);
+}
+
+/// Convert an expected result to a default scoreline for testing.
+fn result_to_scores(result: MatchResult) -> (u32, u32) {
+    match result {
+        MatchResult::TeamA => (2, 1),   // Team A wins 2-1
+        MatchResult::TeamB => (1, 2),   // Team B wins 1-2
+        MatchResult::Draw => (1, 1),    // 1-1 draw
+    }
 }
 
 // ============================================================================
@@ -120,7 +128,7 @@ fn test_submit_match_result_ai_agent_can_submit() {
     // Advance time past match start
     env.ledger().with_mut(|l| l.timestamp += 2000);
 
-    submit_match_result(&env, &contract_id, &ai_agent, match_id, MatchResult::TeamA);
+    submit_match_result(&env, &client, &ai_agent, match_id, MatchResult::TeamA);
 
     let match_record =
         env.as_contract(&contract_id, || storage::get_match(&env, match_id).unwrap());
@@ -129,7 +137,7 @@ fn test_submit_match_result_ai_agent_can_submit() {
 }
 
 #[test]
-#[should_panic(expected = "Result already submitted")]
+#[should_panic(expected = "result_already_submitted")]
 fn test_submit_match_result_duplicate_submission_rejected() {
     let (env, client, contract_id, _admin, ai_agent, xlm_token) = setup();
     let creator = Address::generate(&env);
@@ -138,8 +146,8 @@ fn test_submit_match_result_duplicate_submission_rejected() {
 
     env.ledger().with_mut(|l| l.timestamp += 2000);
 
-    submit_match_result(&env, &contract_id, &ai_agent, match_id, MatchResult::TeamA);
-    submit_match_result(&env, &contract_id, &ai_agent, match_id, MatchResult::TeamB);
+    submit_match_result(&env, &client, &ai_agent, match_id, MatchResult::TeamA);
+    submit_match_result(&env, &client, &ai_agent, match_id, MatchResult::TeamB);
 }
 
 #[test]
@@ -151,7 +159,7 @@ fn test_submit_match_result_match_updated_correctly() {
 
     env.ledger().with_mut(|l| l.timestamp += 2000);
 
-    submit_match_result(&env, &contract_id, &ai_agent, match_id, MatchResult::Draw);
+    submit_match_result(&env, &client, &ai_agent, match_id, MatchResult::Draw);
 
     let match_record =
         env.as_contract(&contract_id, || storage::get_match(&env, match_id).unwrap());
@@ -177,11 +185,11 @@ fn test_verify_event_winners_identifies_winners_correctly() {
     client.join_event(&user1, &invite_code);
     client.join_event(&user2, &invite_code);
 
-    client.submit_prediction(&user1, &match_id, &Symbol::new(&env, "TEAM_A"));
-    client.submit_prediction(&user2, &match_id, &Symbol::new(&env, "TEAM_B"));
+    client.submit_prediction(&user1, &match_id, &2u32, &1u32);
+    client.submit_prediction(&user2, &match_id, &1u32, &2u32);
 
     env.ledger().with_mut(|l| l.timestamp += 15_000);
-    submit_match_result(&env, &contract_id, &ai_agent, match_id, MatchResult::TeamA);
+    submit_match_result(&env, &client, &ai_agent, match_id, MatchResult::TeamA);
 
     let winner_count = client.verify_event_winners(&user1, &event_id);
     assert_eq!(winner_count, 1);
@@ -252,24 +260,24 @@ fn test_verify_event_winners_partial_scores_excluded() {
     client.join_event(&user2, &invite_code);
 
     // User1 predicts both correctly
-    client.submit_prediction(&user1, &match_id_1, &Symbol::new(&env, "TEAM_A"));
-    client.submit_prediction(&user1, &match_id_2, &Symbol::new(&env, "TEAM_B"));
+    client.submit_prediction(&user1, &match_id_1, &2u32, &1u32);
+    client.submit_prediction(&user1, &match_id_2, &1u32, &2u32);
 
     // User2 predicts only one correctly
-    client.submit_prediction(&user2, &match_id_1, &Symbol::new(&env, "TEAM_A"));
-    client.submit_prediction(&user2, &match_id_2, &Symbol::new(&env, "TEAM_A"));
+    client.submit_prediction(&user2, &match_id_1, &2u32, &1u32);
+    client.submit_prediction(&user2, &match_id_2, &2u32, &1u32);
 
     env.ledger().with_mut(|l| l.timestamp += 25_000);
     submit_match_result(
         &env,
-        &contract_id,
+        &client,
         &ai_agent,
         match_id_1,
         MatchResult::TeamA,
     );
     submit_match_result(
         &env,
-        &contract_id,
+        &client,
         &ai_agent,
         match_id_2,
         MatchResult::TeamB,
@@ -309,10 +317,10 @@ fn test_verify_event_winners_empty_winners_handled() {
         create_event_with_match(&env, &contract_id, &client, &creator, &xlm_token, 10_000);
 
     client.join_event(&user, &invite_code);
-    client.submit_prediction(&user, &match_id, &Symbol::new(&env, "TEAM_A"));
+    client.submit_prediction(&user, &match_id, &2u32, &1u32);
 
     env.ledger().with_mut(|l| l.timestamp += 15_000);
-    submit_match_result(&env, &contract_id, &ai_agent, match_id, MatchResult::TeamB);
+    submit_match_result(&env, &client, &ai_agent, match_id, MatchResult::TeamB);
 
     let winner_count = client.verify_event_winners(&user, &event_id);
     assert_eq!(winner_count, 0);
@@ -336,12 +344,12 @@ fn test_verify_event_winners_multiple_winners_supported() {
     client.join_event(&user2, &invite_code);
     client.join_event(&user3, &invite_code);
 
-    client.submit_prediction(&user1, &match_id, &Symbol::new(&env, "TEAM_A"));
-    client.submit_prediction(&user2, &match_id, &Symbol::new(&env, "TEAM_A"));
-    client.submit_prediction(&user3, &match_id, &Symbol::new(&env, "TEAM_B"));
+    client.submit_prediction(&user1, &match_id, &2u32, &1u32);
+    client.submit_prediction(&user2, &match_id, &2u32, &1u32);
+    client.submit_prediction(&user3, &match_id, &1u32, &2u32);
 
     env.ledger().with_mut(|l| l.timestamp += 15_000);
-    submit_match_result(&env, &contract_id, &ai_agent, match_id, MatchResult::TeamA);
+    submit_match_result(&env, &client, &ai_agent, match_id, MatchResult::TeamA);
 
     let winner_count = client.verify_event_winners(&user1, &event_id);
     assert_eq!(winner_count, 2);
@@ -364,15 +372,15 @@ fn test_verify_event_winners_completion_time_tracked() {
     client.join_event(&user2, &invite_code);
 
     // User1 predicts first
-    client.submit_prediction(&user1, &match_id, &Symbol::new(&env, "TEAM_A"));
+    client.submit_prediction(&user1, &match_id, &2u32, &1u32);
 
     env.ledger().with_mut(|l| l.timestamp += 100);
 
     // User2 predicts later
-    client.submit_prediction(&user2, &match_id, &Symbol::new(&env, "TEAM_A"));
+    client.submit_prediction(&user2, &match_id, &2u32, &1u32);
 
     env.ledger().with_mut(|l| l.timestamp += 15_000);
-    submit_match_result(&env, &contract_id, &ai_agent, match_id, MatchResult::TeamA);
+    submit_match_result(&env, &client, &ai_agent, match_id, MatchResult::TeamA);
 
     client.verify_event_winners(&user1, &event_id);
 
@@ -402,11 +410,11 @@ fn test_get_event_winners_returns_all_winners() {
     client.join_event(&user1, &invite_code);
     client.join_event(&user2, &invite_code);
 
-    client.submit_prediction(&user1, &match_id, &Symbol::new(&env, "TEAM_A"));
-    client.submit_prediction(&user2, &match_id, &Symbol::new(&env, "TEAM_A"));
+    client.submit_prediction(&user1, &match_id, &2u32, &1u32);
+    client.submit_prediction(&user2, &match_id, &2u32, &1u32);
 
     env.ledger().with_mut(|l| l.timestamp += 15_000);
-    submit_match_result(&env, &contract_id, &ai_agent, match_id, MatchResult::TeamA);
+    submit_match_result(&env, &client, &ai_agent, match_id, MatchResult::TeamA);
 
     client.verify_event_winners(&user1, &event_id);
 
@@ -427,14 +435,14 @@ fn test_get_event_winners_sorted_by_completion_time() {
     client.join_event(&user1, &invite_code);
     client.join_event(&user2, &invite_code);
 
-    client.submit_prediction(&user2, &match_id, &Symbol::new(&env, "TEAM_A"));
+    client.submit_prediction(&user2, &match_id, &2u32, &1u32);
 
     env.ledger().with_mut(|l| l.timestamp += 500);
 
-    client.submit_prediction(&user1, &match_id, &Symbol::new(&env, "TEAM_A"));
+    client.submit_prediction(&user1, &match_id, &2u32, &1u32);
 
     env.ledger().with_mut(|l| l.timestamp += 15_000);
-    submit_match_result(&env, &contract_id, &ai_agent, match_id, MatchResult::TeamA);
+    submit_match_result(&env, &client, &ai_agent, match_id, MatchResult::TeamA);
 
     client.verify_event_winners(&user1, &event_id);
 
@@ -519,28 +527,28 @@ fn test_get_user_score_calculation_accurate() {
     });
 
     client.join_event(&user, &invite_code);
-    client.submit_prediction(&user, &match_id_1, &Symbol::new(&env, "TEAM_A"));
-    client.submit_prediction(&user, &match_id_2, &Symbol::new(&env, "TEAM_B"));
+    client.submit_prediction(&user, &match_id_1, &2u32, &1u32);
+    client.submit_prediction(&user, &match_id_2, &1u32, &2u32);
 
     env.ledger().with_mut(|l| l.timestamp += 25_000);
     submit_match_result(
         &env,
-        &contract_id,
+        &client,
         &ai_agent,
         match_id_1,
         MatchResult::TeamA,
     );
     submit_match_result(
         &env,
-        &contract_id,
+        &client,
         &ai_agent,
         match_id_2,
         MatchResult::TeamA,
     );
 
-    let (correct, total) = client.get_user_score(&user, &event_id);
-    assert_eq!(correct, 1);
-    assert_eq!(total, 2);
+    let (total_points, correct_results, _exact_scores, total_matches) = client.get_user_score(&user, &event_id);
+    assert_eq!(correct_results, 1);
+    assert_eq!(total_matches, 2);
 }
 
 #[test]
@@ -553,11 +561,11 @@ fn test_get_user_score_unresolved_predictions_not_counted() {
         create_event_with_match(&env, &contract_id, &client, &creator, &xlm_token, 10_000);
 
     client.join_event(&user, &invite_code);
-    client.submit_prediction(&user, &match_id, &Symbol::new(&env, "TEAM_A"));
+    client.submit_prediction(&user, &match_id, &2u32, &1u32);
 
-    let (correct, total) = client.get_user_score(&user, &event_id);
-    assert_eq!(correct, 0);
-    assert_eq!(total, 1);
+    let (total_points, correct_results, exact_scores, total_matches) = client.get_user_score(&user, &event_id);
+    assert_eq!(correct_results, 0);
+    assert_eq!(total_matches, 1);
 }
 
 #[test]
@@ -570,14 +578,14 @@ fn test_get_user_score_zero_score_handled() {
         create_event_with_match(&env, &contract_id, &client, &creator, &xlm_token, 10_000);
 
     client.join_event(&user, &invite_code);
-    client.submit_prediction(&user, &match_id, &Symbol::new(&env, "TEAM_A"));
+    client.submit_prediction(&user, &match_id, &2u32, &1u32);
 
     env.ledger().with_mut(|l| l.timestamp += 15_000);
-    submit_match_result(&env, &contract_id, &ai_agent, match_id, MatchResult::TeamB);
+    submit_match_result(&env, &client, &ai_agent, match_id, MatchResult::TeamB);
 
-    let (correct, total) = client.get_user_score(&user, &event_id);
-    assert_eq!(correct, 0);
-    assert_eq!(total, 1);
+    let (total_points, correct_results, exact_scores, total_matches) = client.get_user_score(&user, &event_id);
+    assert_eq!(correct_results, 0);
+    assert_eq!(total_matches, 1);
 }
 
 

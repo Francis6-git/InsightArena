@@ -87,8 +87,10 @@ fn add_prediction(env: &Env, event_id: u64, match_id: u64, predictor: &Address) 
         match_id,
         event_id,
         predictor.clone(),
-        Symbol::new(env, "TEAM_A"),
+        2u32,
+        1u32,
         env.ledger().timestamp(),
+        env,
     );
     storage::set_prediction(env, prediction_id, &prediction);
     storage::add_match_prediction(env, match_id, prediction_id);

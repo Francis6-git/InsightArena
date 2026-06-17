@@ -431,11 +431,14 @@ fn test_prediction_grade_team_a_correct() {
         5,
         10,
         Address::generate(&env),
-        Symbol::new(&env, OUTCOME_TEAM_A),
+        2u32,
+        1u32,
         1_640_995_200,
+        &env,
     );
-    pred.grade(&Symbol::new(&env, OUTCOME_TEAM_A));
+    pred.grade(2u32, 1u32);  // Exact match
     assert_eq!(pred.is_correct, Some(true));
+    assert_eq!(pred.points_earned, Some(4)); // 1 + 3 for exact
     assert!(pred.is_winner());
 }
 
@@ -447,11 +450,14 @@ fn test_prediction_grade_team_a_wrong() {
         5,
         10,
         Address::generate(&env),
-        Symbol::new(&env, OUTCOME_TEAM_A),
+        2u32,
+        1u32,
         1_640_995_200,
+        &env,
     );
-    pred.grade(&Symbol::new(&env, OUTCOME_TEAM_B));
+    pred.grade(1u32, 2u32);  // Wrong result (predict 2-1 TeamA, got 1-2 TeamB)
     assert_eq!(pred.is_correct, Some(false));
+    assert_eq!(pred.points_earned, Some(0));
     assert!(!pred.is_winner());
 }
 
@@ -463,11 +469,14 @@ fn test_prediction_grade_draw_correct() {
         5,
         10,
         Address::generate(&env),
-        Symbol::new(&env, OUTCOME_DRAW),
+        1u32,
+        1u32,
         1_640_995_200,
+        &env,
     );
-    pred.grade(&Symbol::new(&env, OUTCOME_DRAW));
+    pred.grade(1u32, 1u32);  // Exact draw
     assert_eq!(pred.is_correct, Some(true));
+    assert_eq!(pred.points_earned, Some(4)); // Exact draw
     assert!(pred.is_winner());
 }
 
@@ -479,8 +488,10 @@ fn test_prediction_is_before_match_time_boundary() {
         5,
         10,
         Address::generate(&env),
-        Symbol::new(&env, OUTCOME_TEAM_A),
+        2u32,
+        1u32,
         100,
+        &env,
     );
     // predicted_at (100) < match_time (100) => false (not strictly before)
     assert!(!pred.is_before_match_time(100));
