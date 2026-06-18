@@ -25,5 +25,6 @@ import { CreatorEventsService } from './creator-events.service';
     AdminCreatorEventsController,
   ],
   providers: [CreatorEventsService],
+  exports: [CreatorEventsService],
 })
 export class CreatorEventsModule {}
