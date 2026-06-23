@@ -1,6 +1,5 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { ScheduleModule } from '@nestjs/schedule';
 import { Notification } from './entities/notification.entity';
 import { NotificationDigestState } from './entities/notification-digest-state.entity';
 import { NotificationsService } from './notifications.service';
@@ -27,7 +26,6 @@ import { WebsocketModule } from '../websocket/websocket.module';
       Match,
       MatchPrediction,
     ]),
-    ScheduleModule,
     UsersModule,
     WebsocketModule,
   ],

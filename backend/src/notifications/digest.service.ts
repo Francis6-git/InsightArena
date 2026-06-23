@@ -1,8 +1,7 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, MoreThanOrEqual } from 'typeorm';
-import { SchedulerRegistry } from '@nestjs/schedule';
-import { CronJob } from 'cron';
+import { Cron } from '@nestjs/schedule';
 import { ConfigService } from '@nestjs/config';
 import { UserPreferences } from '../users/entities/user-preferences.entity';
 import { User } from '../users/entities/user.entity';
@@ -12,7 +11,7 @@ import { EmailService } from './email.service';
 import { renderEmailTemplate, DigestItem } from './email-templates';
 
 @Injectable()
-export class DigestService implements OnModuleInit {
+export class DigestService {
   private readonly logger = new Logger(DigestService.name);
 
   constructor(
@@ -26,52 +25,42 @@ export class DigestService implements OnModuleInit {
     private readonly digestStateRepo: Repository<NotificationDigestState>,
     private readonly emailService: EmailService,
     private readonly config: ConfigService,
-    private readonly schedulerRegistry: SchedulerRegistry,
   ) {}
 
-  onModuleInit(): void {
-    if (this.config.get<string>('DIGEST_ENABLED') === 'false') {
-      this.logger.log('Digest disabled via DIGEST_ENABLED=false');
-      return;
-    }
+  // Fires every hour on the hour; only does real work at DIGEST_DAILY_HOUR_UTC.
+  @Cron('0 0 * * * *')
+  async handleHourlyCheck(): Promise<void> {
+    if (this.config.get<string>('DIGEST_ENABLED') === 'false') return;
 
-    const hour = parseInt(
+    const now = new Date();
+    const configuredHour = parseInt(
       this.config.get<string>('DIGEST_DAILY_HOUR_UTC') ?? '8',
       10,
     );
+
+    if (now.getUTCHours() !== configuredHour) return;
+
+    await this.sendDailyDigests(now);
+
     const weekDay = parseInt(
       this.config.get<string>('DIGEST_WEEKLY_DAY') ?? '1',
       10,
     );
-
-    const dailyJob = new CronJob(`0 0 ${hour} * * *`, () => {
-      void this.sendDailyDigests();
-    });
-    const weeklyJob = new CronJob(`0 0 ${hour} * * ${weekDay}`, () => {
-      void this.sendWeeklyDigests();
-    });
-
-    this.schedulerRegistry.addCronJob('digest-daily', dailyJob);
-    this.schedulerRegistry.addCronJob('digest-weekly', weeklyJob);
-
-    dailyJob.start();
-    weeklyJob.start();
-
-    this.logger.log(
-      `Digest cron registered — daily at ${hour}:00 UTC, weekly on day ${weekDay}`,
-    );
+    if (now.getUTCDay() === weekDay) {
+      await this.sendWeeklyDigests(now);
+    }
   }
 
-  async sendDailyDigests(): Promise<void> {
-    const periodKey = this.getDailyPeriodKey(new Date());
-    const windowStart = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  async sendDailyDigests(now = new Date()): Promise<void> {
+    const periodKey = this.getDailyPeriodKey(now);
+    const windowStart = new Date(now.getTime() - 24 * 60 * 60 * 1000);
     this.logger.log(`Running daily digest for period ${periodKey}`);
     await this.runDigests('daily', periodKey, windowStart);
   }
 
-  async sendWeeklyDigests(): Promise<void> {
-    const periodKey = this.getWeeklyPeriodKey(new Date());
-    const windowStart = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  async sendWeeklyDigests(now = new Date()): Promise<void> {
+    const periodKey = this.getWeeklyPeriodKey(now);
+    const windowStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
     this.logger.log(`Running weekly digest for period ${periodKey}`);
     await this.runDigests('weekly', periodKey, windowStart);
   }
@@ -144,7 +133,7 @@ export class DigestService implements OnModuleInit {
       text: rendered.text,
     });
 
-    // persist the sent period to prevent duplicates
+    // persist sent period to prevent duplicates
     if (!state) {
       state = this.digestStateRepo.create({ userId: pref.userId });
     }
