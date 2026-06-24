@@ -161,30 +161,22 @@ describe('AuthService', () => {
     expect(service.isValidChallenge('unknown')).toBe(false);
   });
 
-  it('verifySignature() throws when nonce is already used', async () => {
-    const challenge = service.generateChallenge(address);
+  it('verifySignature() rejects a replayed challenge', async () => {
+    service.generateChallenge(address);
+    const verifySignature = jest
+      .spyOn(service, 'verifyStellarSignature')
+      .mockReturnValue(true);
+    const savedUser = { id: 'u-replay', stellar_address: address } as User;
+    usersRepository.findOneBy.mockResolvedValue(null);
+    usersRepository.create.mockReturnValue(savedUser);
+    usersRepository.save.mockResolvedValue(savedUser);
 
-    const cache = (
-      service as unknown as {
-        challengeCache: Map<string, { expiresAt: number; used: boolean }>;
-      }
-    ).challengeCache;
-    const entry = cache.get(challenge)!;
-    entry.used = true;
-    cache.set(challenge, entry);
+    await service.verifySignature(address, 'signed-hex');
 
-    jest
-      .spyOn(
-        service as unknown as {
-          findValidChallengeForAddress: (addr: string) => string | null;
-        },
-        'findValidChallengeForAddress',
-      )
-      .mockReturnValue(challenge);
-
-    await expect(service.verifySignature(address, 'any-sig')).rejects.toThrow(
-      UnauthorizedException,
-    );
+    await expect(
+      service.verifySignature(address, 'signed-hex'),
+    ).rejects.toThrow('Challenge already used');
+    expect(verifySignature).toHaveBeenCalledTimes(1);
   });
 
   it('isValidChallenge() deletes and rejects expired challenges', () => {

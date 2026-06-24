@@ -133,14 +133,13 @@ export class AuthService {
     return user;
   }
 
-  /** Finds the most recent valid (non-expired, non-used) challenge for a given address. */
+  /** Finds the most recent valid (non-expired) challenge for a given address. */
   private findValidChallengeForAddress(stellar_address: string): string | null {
     const now = Date.now();
     for (const [key, entry] of this.challengeCache.entries()) {
       if (
         key.endsWith(`:${stellar_address}`) &&
-        now <= entry.expiresAt &&
-        !entry.used
+        now <= entry.expiresAt
       ) {
         return key;
       }
