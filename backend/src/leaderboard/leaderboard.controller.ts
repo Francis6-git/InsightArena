@@ -19,10 +19,6 @@ import {
   PaginatedLeaderboardHistoryResponse,
 } from './dto/leaderboard-history.dto';
 import { UserRankDto } from './dto/user-rank.dto';
-import {
-  CursorPaginationDto,
-  PaginatedCursorResponse,
-} from './dto/cursor-pagination.dto';
 import { Public } from '../common/decorators/public.decorator';
 
 @ApiTags('Leaderboard')
@@ -89,29 +85,6 @@ export class LeaderboardController {
       );
     }
     return this.leaderboardService.getHistory(query);
-  }
-
-  @Get('top/:n')
-  @Public()
-  @ApiOperation({
-    summary:
-      'Get top N leaderboard entries for the current active season (lightweight shortcut)',
-  })
-  @ApiParam({
-    name: 'n',
-    description: 'Number of entries to return (max 20)',
-    type: Number,
-  })
-  @ApiQuery({ name: 'season_id', required: false, type: String })
-  @ApiResponse({
-    status: 200,
-    description: 'Top N leaderboard entries, served from cache when available',
-  })
-  async getTopN(
-    @Param('n') n: number,
-    @Query('season_id') seasonId?: string,
-  ): Promise<LeaderboardEntryResponse[]> {
-    return this.leaderboardService.getTopN(n, seasonId);
   }
 
   @Get(':address')
