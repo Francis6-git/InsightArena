@@ -163,6 +163,14 @@ pub fn get_user_events(env: &Env, user: Address) -> Vec<u64> {
     out
 }
 
+/// Return the count of events that `user` has joined.
+///
+/// Lightweight alternative to `get_user_events` for dashboards that display
+/// only a "X events joined" badge. Returns 0 for unknown users.
+pub fn get_user_joined_events_count(env: &Env, user: Address) -> u32 {
+    get_user_events(env, user).len()
+}
+
 /// Platform-wide statistics aggregated across all events.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]

@@ -616,6 +616,14 @@ impl CreatorEventManagerContract {
         views::get_user_events(&env, user)
     }
 
+    /// Return the count of events that a user has joined.
+    ///
+    /// Lightweight alternative to `get_user_events` for dashboards that display
+    /// only a "X events joined" badge. Returns 0 for unknown users.
+    pub fn get_user_joined_events_count(env: Env, user: Address) -> u32 {
+        views::get_user_joined_events_count(&env, user)
+    }
+
     /// Calculate how many users predicted each outcome for a match.
     ///
     /// Returns `(team_a_count, team_b_count, draw_count)`.  All three counts

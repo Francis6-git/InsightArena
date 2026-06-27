@@ -825,6 +825,81 @@ fn test_get_prediction_distribution_multiple_matches_independent() {
     assert_eq!((a2, b2, d2), (0, 0, 1));
 }
 
+#[test]
+fn test_get_prediction_distribution_all_three_outcomes() {
+    let (env, client, contract_id, _admin, xlm_token) = setup();
+    let creator = Address::generate(&env);
+    let user1 = Address::generate(&env);
+    let user2 = Address::generate(&env);
+    let user3 = Address::generate(&env);
+    let user4 = Address::generate(&env);
+    let user5 = Address::generate(&env);
+
+    let (_event_id, invite_code, match_id) =
+        create_event_and_match(&env, &contract_id, &client, &creator, &xlm_token, 5, 10_000);
+
+    // Join 5 users
+    client.join_event(&user1, &invite_code);
+    client.join_event(&user2, &invite_code);
+    client.join_event(&user3, &invite_code);
+    client.join_event(&user4, &invite_code);
+    client.join_event(&user5, &invite_code);
+
+    // Have 2 users predict TEAM_A, 1 predict DRAW, and 2 predict TEAM_B
+    client.submit_prediction(&user1, &match_id, &2u32, &1u32); // TEAM_A
+    client.submit_prediction(&user2, &match_id, &3u32, &0u32); // TEAM_A
+    client.submit_prediction(&user3, &match_id, &1u32, &1u32); // DRAW
+    client.submit_prediction(&user4, &match_id, &0u32, &1u32); // TEAM_B
+    client.submit_prediction(&user5, &match_id, &0u32, &2u32); // TEAM_B
+
+    let (team_a, team_b, draw) = client.get_prediction_distribution(&match_id);
+    assert_eq!(team_a, 2);
+    assert_eq!(team_b, 2);
+    assert_eq!(draw, 1);
+}
+
+#[test]
+fn test_get_prediction_distribution_zero_predictions_all_zero() {
+    let (env, client, contract_id, _admin, xlm_token) = setup();
+    let creator = Address::generate(&env);
+
+    let (_event_id, _invite_code, match_id) =
+        create_event_and_match(&env, &contract_id, &client, &creator, &xlm_token, 2, 10_000);
+
+    // Call on a match with no predictions
+    let (team_a, team_b, draw) = client.get_prediction_distribution(&match_id);
+    assert_eq!(team_a, 0);
+    assert_eq!(team_b, 0);
+    assert_eq!(draw, 0);
+}
+
+#[test]
+fn test_get_prediction_distribution_single_outcome_saturation() {
+    let (env, client, contract_id, _admin, xlm_token) = setup();
+    let creator = Address::generate(&env);
+    let user1 = Address::generate(&env);
+    let user2 = Address::generate(&env);
+    let user3 = Address::generate(&env);
+
+    let (_event_id, invite_code, match_id) =
+        create_event_and_match(&env, &contract_id, &client, &creator, &xlm_token, 5, 10_000);
+
+    // Join 3 users
+    client.join_event(&user1, &invite_code);
+    client.join_event(&user2, &invite_code);
+    client.join_event(&user3, &invite_code);
+
+    // All 3 users predict TEAM_A
+    client.submit_prediction(&user1, &match_id, &2u32, &1u32); // TEAM_A
+    client.submit_prediction(&user2, &match_id, &3u32, &0u32); // TEAM_A
+    client.submit_prediction(&user3, &match_id, &4u32, &0u32); // TEAM_A
+
+    let (team_a, team_b, draw) = client.get_prediction_distribution(&match_id);
+    assert_eq!(team_a, 3);
+    assert_eq!(team_b, 0);
+    assert_eq!(draw, 0);
+}
+
 // ---------------------------------------------------------------------------
 // Kickoff time boundary tests (#1017)
 // ---------------------------------------------------------------------------

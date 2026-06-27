@@ -530,6 +530,106 @@ fn test_get_platform_statistics_fees_accumulated() {
     assert_eq!(stats.total_fees_collected, FEE * 3);
 }
 
+#[test]
+fn test_get_platform_statistics_comprehensive_counter_test() {
+    let (env, client, contract_id, xlm_token) = setup();
+    let creator = Address::generate(&env);
+    let user1 = Address::generate(&env);
+    let user2 = Address::generate(&env);
+    let user3 = Address::generate(&env);
+
+    // Start: call get_platform_statistics; assert all counters are 0.
+    let initial_stats = client.get_platform_statistics();
+    assert_eq!(initial_stats.total_events, 0);
+    assert_eq!(initial_stats.total_matches, 0);
+    assert_eq!(initial_stats.total_predictions, 0);
+    assert_eq!(initial_stats.unique_participants, 0);
+    assert_eq!(initial_stats.total_fees_collected, 0);
+
+    // Create 2 events; assert total_events == 2.
+    fund(&env, &xlm_token, &creator, FEE);
+    let start_time = get_future_time(&env, 3600);
+    let end_time = get_future_time(&env, 7200);
+    let (event_id_1, invite_code_1) = client.create_event(
+        &creator,
+        &title(&env),
+        &desc(&env),
+        &10u32,
+        &start_time,
+        &end_time,
+        &0i128,
+        &Vec::new(&env),
+        &0i128,
+    );
+
+    fund(&env, &xlm_token, &creator, FEE);
+    let start_time2 = get_future_time(&env, 3700);
+    let end_time2 = get_future_time(&env, 7300);
+    let (event_id_2, invite_code_2) = client.create_event(
+        &creator,
+        &title(&env),
+        &desc(&env),
+        &10u32,
+        &start_time2,
+        &end_time2,
+        &0i128,
+        &Vec::new(&env),
+        &0i128,
+    );
+
+    let after_events = client.get_platform_statistics();
+    assert_eq!(after_events.total_events, 2);
+    assert_eq!(after_events.total_fees_collected, FEE * 2);
+
+    // Add 2 matches to each event (4 total); assert total_matches == 4.
+    let (match_id_1_1, match_id_1_2, match_id_2_1, match_id_2_2) = env.as_contract(&contract_id, || {
+        let m1_1 = add_match(&env, event_id_1, false);
+        let m1_2 = add_match(&env, event_id_1, false);
+        let m2_1 = add_match(&env, event_id_2, false);
+        let m2_2 = add_match(&env, event_id_2, false);
+        (m1_1, m1_2, m2_1, m2_2)
+    });
+
+    let after_matches = client.get_platform_statistics();
+    assert_eq!(after_matches.total_matches, 4);
+
+    // Have 3 users join both events; submit predictions for each match.
+    client.join_event(&user1, &invite_code_1);
+    client.join_event(&user2, &invite_code_1);
+    client.join_event(&user3, &invite_code_1);
+    client.join_event(&user1, &invite_code_2);
+    client.join_event(&user2, &invite_code_2);
+    client.join_event(&user3, &invite_code_2);
+
+    env.as_contract(&contract_id, || {
+        // User1 predictions for event 1
+        add_prediction(&env, event_id_1, match_id_1_1, &user1);
+        add_prediction(&env, event_id_1, match_id_1_2, &user1);
+        // User1 predictions for event 2
+        add_prediction(&env, event_id_2, match_id_2_1, &user1);
+        add_prediction(&env, event_id_2, match_id_2_2, &user1);
+
+        // User2 predictions for event 1
+        add_prediction(&env, event_id_1, match_id_1_1, &user2);
+        add_prediction(&env, event_id_1, match_id_1_2, &user2);
+        // User2 predictions for event 2
+        add_prediction(&env, event_id_2, match_id_2_1, &user2);
+        add_prediction(&env, event_id_2, match_id_2_2, &user2);
+
+        // User3 predictions for event 1
+        add_prediction(&env, event_id_1, match_id_1_1, &user3);
+        add_prediction(&env, event_id_1, match_id_1_2, &user3);
+        // User3 predictions for event 2
+        add_prediction(&env, event_id_2, match_id_2_1, &user3);
+        add_prediction(&env, event_id_2, match_id_2_2, &user3);
+    });
+
+    let final_stats = client.get_platform_statistics();
+    assert_eq!(final_stats.total_predictions, 12); // 3 users × 2 events × 2 matches each
+    assert_eq!(final_stats.unique_participants, 3); // user1, user2, user3
+    assert_eq!(final_stats.total_fees_collected, FEE * 2); // 2 events created
+}
+
 // =============================================================================
 // is_event_finalized tests
 // =============================================================================
@@ -861,4 +961,144 @@ fn test_get_event_prize_pool_post_finalize_is_readable() {
 fn test_get_event_prize_pool_not_found_panics() {
     let (_env, client, _contract_id, _xlm_token) = setup();
     client.get_event_prize_pool(&9999u64);
+}
+
+// =============================================================================
+// get_user_joined_events_count tests (#1038)
+// =============================================================================
+
+#[test]
+fn test_get_user_joined_events_count_returns_zero_for_unknown_users() {
+    let (env, client, _contract_id, _xlm_token) = setup();
+    let unknown_user = Address::generate(&env);
+
+    let count = client.get_user_joined_events_count(&unknown_user);
+    assert_eq!(count, 0);
+}
+
+#[test]
+fn test_get_user_joined_events_count_consistent_with_get_user_events() {
+    let (env, client, _contract_id, xlm_token) = setup();
+    let creator = Address::generate(&env);
+    let user = Address::generate(&env);
+
+    fund(&env, &xlm_token, &creator, FEE);
+    let start_time = get_future_time(&env, 3600);
+    let end_time = get_future_time(&env, 7200);
+    let (event_id_1, invite_code_1) = client.create_event(
+        &creator,
+        &title(&env),
+        &desc(&env),
+        &5u32,
+        &start_time,
+        &end_time,
+        &0i128,
+        &Vec::new(&env),
+        &0i128,
+    );
+
+    fund(&env, &xlm_token, &creator, FEE);
+    let start_time2 = get_future_time(&env, 3700);
+    let end_time2 = get_future_time(&env, 7300);
+    let (event_id_2, invite_code_2) = client.create_event(
+        &creator,
+        &title(&env),
+        &desc(&env),
+        &5u32,
+        &start_time2,
+        &end_time2,
+        &0i128,
+        &Vec::new(&env),
+        &0i128,
+    );
+
+    fund(&env, &xlm_token, &creator, FEE);
+    let start_time3 = get_future_time(&env, 3800);
+    let end_time3 = get_future_time(&env, 7400);
+    let (event_id_3, invite_code_3) = client.create_event(
+        &creator,
+        &title(&env),
+        &desc(&env),
+        &5u32,
+        &start_time3,
+        &end_time3,
+        &0i128,
+        &Vec::new(&env),
+        &0i128,
+    );
+
+    // User joins 2 out of 3 events
+    client.join_event(&user, &invite_code_1);
+    client.join_event(&user, &invite_code_2);
+
+    let events = client.get_user_events(&user);
+    let count = client.get_user_joined_events_count(&user);
+
+    assert_eq!(events.len(), 2);
+    assert_eq!(count, 2);
+    assert_eq!(count, events.len());
+}
+
+#[test]
+fn test_get_user_joined_events_count_increments_with_joins() {
+    let (env, client, _contract_id, xlm_token) = setup();
+    let creator = Address::generate(&env);
+    let user = Address::generate(&env);
+
+    // Initial count should be 0
+    assert_eq!(client.get_user_joined_events_count(&user), 0);
+
+    // Create and join first event
+    fund(&env, &xlm_token, &creator, FEE);
+    let start_time = get_future_time(&env, 3600);
+    let end_time = get_future_time(&env, 7200);
+    let (event_id_1, invite_code_1) = client.create_event(
+        &creator,
+        &title(&env),
+        &desc(&env),
+        &5u32,
+        &start_time,
+        &end_time,
+        &0i128,
+        &Vec::new(&env),
+        &0i128,
+    );
+    client.join_event(&user, &invite_code_1);
+    assert_eq!(client.get_user_joined_events_count(&user), 1);
+
+    // Create and join second event
+    fund(&env, &xlm_token, &creator, FEE);
+    let start_time2 = get_future_time(&env, 3700);
+    let end_time2 = get_future_time(&env, 7300);
+    let (event_id_2, invite_code_2) = client.create_event(
+        &creator,
+        &title(&env),
+        &desc(&env),
+        &5u32,
+        &start_time2,
+        &end_time2,
+        &0i128,
+        &Vec::new(&env),
+        &0i128,
+    );
+    client.join_event(&user, &invite_code_2);
+    assert_eq!(client.get_user_joined_events_count(&user), 2);
+
+    // Create and join third event
+    fund(&env, &xlm_token, &creator, FEE);
+    let start_time3 = get_future_time(&env, 3800);
+    let end_time3 = get_future_time(&env, 7400);
+    let (event_id_3, invite_code_3) = client.create_event(
+        &creator,
+        &title(&env),
+        &desc(&env),
+        &5u32,
+        &start_time3,
+        &end_time3,
+        &0i128,
+        &Vec::new(&env),
+        &0i128,
+    );
+    client.join_event(&user, &invite_code_3);
+    assert_eq!(client.get_user_joined_events_count(&user), 3);
 }
