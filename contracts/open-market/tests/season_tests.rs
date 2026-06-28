@@ -620,16 +620,22 @@ fn test_reset_season_points_zeroes_all_user_points() {
     fund(&env, &xlm_token, &admin, 500_000_000);
     approve_reward_pool(&env, &xlm_token, &admin, &client.address, 100_000_000);
 
-    let season_id = client.create_season(&admin, &0, &10_000, &100_000_000);
+    let _season_id = client.create_season(&admin, &0, &10_000, &100_000_000);
 
     let winner1 = Address::generate(&env);
     let winner2 = Address::generate(&env);
     let winner3 = Address::generate(&env);
     let loser = Address::generate(&env);
 
-    settle_winning_market(&env, &client, &xlm_token, &oracle, &winner1, &loser, 10_000_000, 10_000_000);
-    settle_winning_market(&env, &client, &xlm_token, &oracle, &winner2, &loser, 10_000_000, 10_000_000);
-    settle_winning_market(&env, &client, &xlm_token, &oracle, &winner3, &loser, 10_000_000, 10_000_000);
+    settle_winning_market(
+        &env, &client, &xlm_token, &oracle, &winner1, &loser, 10_000_000, 10_000_000,
+    );
+    settle_winning_market(
+        &env, &client, &xlm_token, &oracle, &winner2, &loser, 10_000_000, 10_000_000,
+    );
+    settle_winning_market(
+        &env, &client, &xlm_token, &oracle, &winner3, &loser, 10_000_000, 10_000_000,
+    );
 
     let p1 = client.get_user_stats(&winner1);
     let p2 = client.get_user_stats(&winner2);

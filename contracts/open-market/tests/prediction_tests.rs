@@ -294,6 +294,60 @@ fn test_batch_distribute_payouts_distributes_to_all_winners() {
 }
 
 #[test]
+fn test_batch_distribute_payouts_pays_all_unclaimed_winners_correctly_idempotent() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, xlm_token, _, oracle) = deploy(&env);
+
+    let user1 = Address::generate(&env);
+    let user2 = Address::generate(&env);
+    let user3 = Address::generate(&env);
+    let stake = 50_000_000_i128;
+
+    let params = default_params(&env);
+    let market_id = client.create_market(&Address::generate(&env), &params);
+
+    fund(&env, &xlm_token, &user1, stake);
+    fund(&env, &xlm_token, &user2, stake);
+    fund(&env, &xlm_token, &user3, stake);
+
+    client.submit_prediction(&user1, &market_id, &symbol_short!("yes"), &stake);
+    client.submit_prediction(&user2, &market_id, &symbol_short!("yes"), &stake);
+    client.submit_prediction(&user3, &market_id, &symbol_short!("no"), &stake);
+
+    // Resolve with outcome A ("yes")
+    env.ledger()
+        .with_mut(|li| li.timestamp = params.resolution_time + 1);
+    client.resolve_market(&oracle, &market_id, &symbol_short!("yes"));
+
+    // First batch: should process 2 winners
+    let processed_first = client.batch_distribute_payouts(&oracle, &market_id);
+    assert_eq!(processed_first, 2);
+
+    // Winners should now be marked as paid
+    assert!(matches!(
+        client.try_claim_payout(&user1, &market_id),
+        Err(Ok(InsightArenaError::PayoutAlreadyClaimed))
+    ));
+    assert!(matches!(
+        client.try_claim_payout(&user2, &market_id),
+        Err(Ok(InsightArenaError::PayoutAlreadyClaimed))
+    ));
+
+    // Losers must remain unaffected
+    let losers_claim_result = client.try_claim_payout(&user3, &market_id);
+    assert!(matches!(
+        losers_claim_result,
+        Err(Ok(InsightArenaError::InvalidOutcome))
+    ));
+
+    // Second batch: Since the escrow pool is now completely empty (0 balance),
+    // the contract throws an EscrowEmpty error (#32) as expected.
+    let processed_second = client.try_batch_distribute_payouts(&oracle, &market_id);
+    assert!(processed_second.is_err());
+}
+
+#[test]
 fn test_batch_distribute_payouts_fails_for_non_admin() {
     let env = Env::default();
     env.mock_all_auths();
@@ -562,14 +616,14 @@ fn test_submit_prediction_on_cancelled_market_fails() {
     let stake = 20_000_000_i128; // Meets the min_stake requirement
 
     // 2. Pass the authorized manager to create the market
-    let market_id = client.create_market(&manager, &default_params(&env)); 
+    let market_id = client.create_market(&manager, &default_params(&env));
 
     // 3. Fund your test users using the token returned by deploy()
     fund(&env, &xlm_token, &user_alpha, stake);
     fund(&env, &xlm_token, &user_beta, stake);
 
     let outcome_side = symbol_short!("yes");
-    
+
     // 4. User Alpha makes a valid prediction BEFORE cancellation
     client.submit_prediction(&user_alpha, &market_id, &outcome_side, &stake);
     assert!(client.has_predicted(&market_id, &user_alpha));

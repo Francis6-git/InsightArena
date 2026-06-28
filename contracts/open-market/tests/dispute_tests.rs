@@ -281,7 +281,7 @@ fn test_raise_dispute_on_resolved_market_success_within_window() {
     let disputer = Address::generate(&env);
 
     let id = client.create_market(&creator, &market_params(&env));
-    
+
     // 1. Properly resolve the market first
     env.ledger().set_timestamp(env.ledger().timestamp() + 20);
     client.resolve_market(&oracle, &id, &symbol_short!("yes"));

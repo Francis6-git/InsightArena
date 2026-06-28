@@ -1573,11 +1573,20 @@ fn test_get_outcome_price_reflects_post_swap_reserves() {
     // Prices should move in correct direction:
     // - YES reserve increased (more YES in pool), so YES price goes UP
     // - NO reserve decreased (NO taken from pool), so NO price goes DOWN
-    assert!(price_yes_after > price_yes_before, "YES reserve should increase after selling YES");
-    assert!(price_no_after < price_no_before, "NO reserve should decrease after buying NO");
+    assert!(
+        price_yes_after > price_yes_before,
+        "YES reserve should increase after selling YES"
+    );
+    assert!(
+        price_no_after < price_no_before,
+        "NO reserve should decrease after buying NO"
+    );
 
     // Total reserves change by swap_amount (added) minus amount_out (removed)
     let total_after = price_yes_after + price_no_after;
-    assert_eq!(total_after, total_before + swap_amount - amount_out,
-        "Total reserves should reflect net change from swap");
+    assert_eq!(
+        total_after,
+        total_before + swap_amount - amount_out,
+        "Total reserves should reflect net change from swap"
+    );
 }
